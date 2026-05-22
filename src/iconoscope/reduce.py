@@ -46,5 +46,7 @@ def reduce_to_2d(
 
     coords = reducer.fit_transform(features_2d)
     coords = coords - coords.min(axis=0)
-    coords = coords / coords.max(axis=0)
+    span = coords.max(axis=0)
+    span[span == 0] = 1.0  # avoid division by zero if all points share an axis value
+    coords = coords / span
     return coords.astype(np.float32)
