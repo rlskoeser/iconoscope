@@ -56,16 +56,19 @@ def assign_grid(
             used = np.zeros(N, dtype=bool)
             for cell_idx in range(n_cells):
                 cx, cy = cell_centers[cell_idx]
-                dists, idxs = kdtree.query([cx, cy], k=N)
-                for idx in idxs:
-                    if not used[idx]:
-                        used[idx] = True
-                        r, c = (
-                            int(grid_cells[cell_idx][0]),
-                            int(grid_cells[cell_idx][1]),
-                        )
-                        assignments[(r, c)] = int(idx)
+                # start small, double k only if all candidates are already used
+                k = min(N, 20)
+                while True:
+                    _, idxs = kdtree.query([cx, cy], k=k)
+                    idxs = np.atleast_1d(idxs)
+                    free = [i for i in idxs if not used[i]]
+                    if free:
+                        idx = free[0]
                         break
+                    k = min(N, k * 4)
+                used[idx] = True
+                r, c = int(grid_cells[cell_idx][0]), int(grid_cells[cell_idx][1])
+                assignments[(r, c)] = int(idx)
             return assignments
 
         else:
