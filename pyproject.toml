@@ -19,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 umap = ["umap-learn"]
-clip = ["git+https://github.com/openai/CLIP.git"]
+clip = ["clip @ git+https://github.com/openai/CLIP.git"]
 
 [project.scripts]
 iconoscope = "iconoscope.cli:main"

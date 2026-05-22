@@ -60,7 +60,10 @@ def _build_backbone(backend: str, device: str) -> object:
         try:
             import clip
         except ImportError:
-            raise ImportError("CLIP backend requires `pip install transformers`")
+            raise SystemExit(
+                "Error: CLIP backend requires: "
+                "pip install git+https://github.com/openai/CLIP.git"
+            )
         model, _ = clip.load("ViT-B/32", device=device)
         backbone = model.visual
     else:
