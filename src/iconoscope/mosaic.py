@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from math import sqrt
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
 
 
@@ -17,15 +15,8 @@ def render_mosaic(
     show: bool = False,
     jpeg_quality: int = 90,
 ) -> Image.Image:
-    N = len(image_paths)
     grid_cols = canvas_width // thumb_size
     grid_rows = canvas_height // thumb_size
-
-    auto_thumb = max(thumb_size, int(sqrt(canvas_width * canvas_height / max(N, 1)) * 1.1))
-    if auto_thumb > thumb_size:
-        thumb_size = auto_thumb
-        grid_cols = canvas_width // thumb_size
-        grid_rows = canvas_height // thumb_size
 
     canvas = Image.new("RGB", (canvas_width, canvas_height), (255, 255, 255))
     thumb_w = canvas_width // grid_cols

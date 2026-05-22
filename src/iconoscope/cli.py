@@ -61,19 +61,19 @@ def cmd_mosaic(args: argparse.Namespace) -> None:
 
     N = features.shape[0]
     if args.thumb_size == "auto":
-        thumb_size = max(1, int(sqrt(args.width * args.height / N)))
+        # 1.1 ensures grid cells < N after integer division, so every cell gets filled
+        thumb_size = max(1, int(sqrt(args.width * args.height / N) * 1.1))
         print(f"Auto thumb size: {thumb_size}px")
     else:
         thumb_size = args.thumb_size
-
-    grid_cols = args.width // thumb_size
-    grid_rows = args.height // thumb_size
-    n_cells = grid_cols * grid_rows
-    if N < n_cells and args.thumb_size != "auto":
-        print(
-            f"Warning: only {N} images but grid has {n_cells} cells. "
-            "Consider --thumb-size auto, increasing --thumb-size, or reducing --width/--height."
-        )
+        grid_cols = args.width // thumb_size
+        grid_rows = args.height // thumb_size
+        n_cells = grid_cols * grid_rows
+        if N < n_cells:
+            print(
+                f"Warning: only {N} images but grid has {n_cells} cells. "
+                "Consider --thumb-size auto, increasing --thumb-size, or reducing --width/--height."
+            )
 
     if args.load_coords:
         coords = np.load(args.load_coords)
