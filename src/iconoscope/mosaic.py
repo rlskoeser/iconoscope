@@ -35,7 +35,7 @@ def render_mosaic(
             pass
 
     if output_path is not None:
-        ext = Path(output_path).suffix.lower()
+        ext = output_path.suffix.lower()
         if ext in (".jpg", ".jpeg"):
             canvas.save(output_path, quality=jpeg_quality, optimize=True)
         else:

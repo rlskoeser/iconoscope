@@ -38,26 +38,25 @@ def collate_fn(batch):
 
 
 def _build_backbone(backend: str, device: str) -> object:
-    import torch
     import torch.nn as nn
 
-    if backend == "resnet50":
-        from torchvision.models import resnet50, ResNet50_Weights
-
-        model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
-        backbone = nn.Sequential(*list(model.children())[:-2])
-    elif backend == "clip":
-        try:
-            import clip
-        except ImportError:
-            raise SystemExit(
-                "Error: CLIP backend requires: "
-                "pip install git+https://github.com/openai/CLIP.git"
-            )
-        model, _ = clip.load("ViT-B/32", device=device)
-        backbone = model.visual
-    else:
-        raise ValueError(f"Unknown backend: {backend!r}")
+    match backend:
+        case "resnet50":
+            from torchvision.models import resnet50, ResNet50_Weights
+            model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
+            backbone = nn.Sequential(*list(model.children())[:-2])
+        case "clip":
+            try:
+                import clip
+            except ImportError:
+                raise SystemExit(
+                    "Error: CLIP backend requires: "
+                    "pip install git+https://github.com/openai/CLIP.git"
+                )
+            model, _ = clip.load("ViT-B/32", device=device)
+            backbone = model.visual
+        case _:
+            raise ValueError(f"Unknown backend: {backend!r}")
     backbone = backbone.to(device).eval()
     for p in backbone.parameters():
         p.requires_grad_(False)
@@ -67,18 +66,16 @@ def _build_backbone(backend: str, device: str) -> object:
 def _get_transform(backend: str) -> object:
     import torchvision.transforms as T
 
-    if backend == "resnet50":
-        return T.Compose(
-            [
+    match backend:
+        case "resnet50":
+            return T.Compose([
                 T.Resize(256),
                 T.CenterCrop(224),
                 T.ToTensor(),
                 T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]
-        )
-    elif backend == "clip":
-        return T.Compose(
-            [
+            ])
+        case "clip":
+            return T.Compose([
                 T.Resize(224, interpolation=T.InterpolationMode.BICUBIC),
                 T.CenterCrop(224),
                 T.ToTensor(),
@@ -86,10 +83,9 @@ def _get_transform(backend: str) -> object:
                     mean=[0.48145466, 0.4578275, 0.40821073],
                     std=[0.26862954, 0.26130258, 0.27577711],
                 ),
-            ]
-        )
-    else:
-        raise ValueError(f"Unknown backend: {backend!r}")
+            ])
+        case _:
+            raise ValueError(f"Unknown backend: {backend!r}")
 
 
 def extract_features(
