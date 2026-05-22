@@ -13,18 +13,12 @@ from iconoscope.mosaic import render_mosaic
 from iconoscope.reduce import reduce_to_2d
 
 
-def find_images(
-    image_dir: Path,
-    glob_pattern: str = "**/*.jpg",
-) -> list[Path]:
+def find_images(image_dir: Path, ext: str | None = None) -> list[Path]:
+    if ext:
+        ext = ext.lstrip('.')   # ensure extension has one and only one .
+        return sorted(image_dir.rglob(f"*.{ext}"))
     extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-    matches: list[Path] = []
-    for p in sorted(image_dir.rglob("*")):
-        if p.suffix.lower() in extensions:
-            matches.append(p)
-    if not matches:
-        matches = sorted(image_dir.glob(glob_pattern))
-    return matches
+    return [p for p in sorted(image_dir.rglob("*")) if p.suffix.lower() in extensions]
 
 
 def cmd_embed(args: argparse.Namespace) -> None:
@@ -32,7 +26,7 @@ def cmd_embed(args: argparse.Namespace) -> None:
     if not image_dir.is_dir():
         sys.exit(f"error: {image_dir} is not a directory")
 
-    image_paths = find_images(image_dir, args.glob)
+    image_paths = find_images(image_dir, args.ext)
     if not image_paths:
         sys.exit(f"error: no images found in {image_dir}")
 
@@ -66,14 +60,15 @@ def cmd_mosaic(args: argparse.Namespace) -> None:
         print(f"Auto thumb size: {thumb_size}px")
     else:
         thumb_size = args.thumb_size
-        grid_cols = args.width // thumb_size
-        grid_rows = args.height // thumb_size
-        n_cells = grid_cols * grid_rows
-        if N < n_cells:
-            print(
-                f"Warning: only {N} images but grid has {n_cells} cells. "
-                "Consider --thumb-size auto, increasing --thumb-size, or reducing --width/--height."
-            )
+
+    grid_cols = args.width // thumb_size
+    grid_rows = args.height // thumb_size
+    n_cells = grid_cols * grid_rows
+    if args.thumb_size != "auto" and N < n_cells:
+        print(
+            f"Warning: only {N} images but grid has {n_cells} cells. "
+            "Consider --thumb-size auto, increasing --thumb-size, or reducing --width/--height."
+        )
 
     if args.load_coords:
         coords = np.load(args.load_coords)
@@ -136,7 +131,8 @@ def main() -> None:
     )
     embed_parser.add_argument("--batch-size", type=int, default=64, help="Batch size")
     embed_parser.add_argument(
-        "--glob", type=str, default="**/*.jpg", help="Glob pattern for images"
+        "--ext", type=str, default=None, metavar="EXT",
+        help="Limit to images with single extension, e.g. .jpeg (faster than scanning all types)",
     )
     embed_parser.add_argument(
         "--device", type=str, default="auto", help="Device (auto, cpu, cuda, mps)"
