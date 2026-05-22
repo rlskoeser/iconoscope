@@ -57,7 +57,7 @@ def _build_backbone(backend: str, device: str) -> object:
             backbone = model.visual
         case _:
             raise ValueError(f"Unknown backend: {backend!r}")
-    backbone = backbone.to(device).eval()
+    backbone = backbone.to(device).float().eval()
     for p in backbone.parameters():
         p.requires_grad_(False)
     return backbone
