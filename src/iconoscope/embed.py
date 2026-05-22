@@ -26,16 +26,6 @@ class _ImageDataset(Dataset):
             return None, idx
 
 
-def _make_loader(paths, transform, batch_size, num_workers, collate_fn, pin_memory):
-    return DataLoader(
-        _ImageDataset(paths, transform),
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        collate_fn=collate_fn,
-        pin_memory=pin_memory,
-    )
-
 
 def collate_fn(batch):
     import torch
@@ -135,10 +125,10 @@ def extract_features(
         except Exception as e:
             warnings.warn(f"Skipping {p}: {e}")
 
-    loader = _make_loader(
-        valid_paths,
-        transform,
+    loader = DataLoader(
+        _ImageDataset(valid_paths, transform),
         batch_size=batch_size,
+        shuffle=False,
         num_workers=num_workers,
         collate_fn=collate_fn,
         pin_memory=(device_str == "cuda"),
