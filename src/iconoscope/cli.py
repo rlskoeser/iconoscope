@@ -7,10 +7,10 @@ from pathlib import Path
 
 import numpy as np
 
-from embed_mosaic.embed import extract_features
-from embed_mosaic.layout import assign_grid
-from embed_mosaic.mosaic import render_mosaic
-from embed_mosaic.reduce import reduce_to_2d
+from iconoscope.embed import extract_features
+from iconoscope.layout import assign_grid
+from iconoscope.mosaic import render_mosaic
+from iconoscope.reduce import reduce_to_2d
 
 
 def find_images(
