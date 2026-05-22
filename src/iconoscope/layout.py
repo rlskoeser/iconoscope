@@ -39,6 +39,8 @@ def assign_grid(
             full_grid_algo = "hungarian" if n_cells <= 5000 else "kdtree_greedy"
 
         if full_grid_algo == "hungarian":
+            if N > n_cells:
+                print(f"Warning: {N} images but only {n_cells} grid cells; {N - n_cells} images will not be placed.")
             cost = np.linalg.norm(
                 coords[:, np.newaxis, :] - cell_centers[np.newaxis, :, :],
                 axis=2,
