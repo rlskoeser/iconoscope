@@ -129,8 +129,8 @@ def extract_features(
     valid_paths: list[Path] = []
     for p in image_paths:
         try:
-            img = Image.open(p).convert("RGB")
-            img.close()
+            with Image.open(p) as img:
+                img.verify()
             valid_paths.append(p)
         except Exception as e:
             warnings.warn(f"Skipping {p}: {e}")
