@@ -1,6 +1,6 @@
 # CNN Embedding Mosaic
 
-Extract CNN features from images and render a 2D t-SNE/UMAP mosaic. Python adaptation of the MATLAB script `show_embedding.m`.
+Extract CNN features from images and render a 2D t-SNE/UMAP mosaic. Python adaptation inspired by [Andrej Karpathy's CNN embedding visualizer](https://cs.stanford.edu/people/karpathy/cnnembed/) and the accompanying MATLAB script.
 
 ## Install
 
