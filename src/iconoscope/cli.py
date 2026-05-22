@@ -103,7 +103,6 @@ def cmd_mosaic(args: argparse.Namespace) -> None:
         canvas_height=args.height,
         thumb_size=thumb_size,
         output_path=Path(args.output),
-        show=args.show,
         jpeg_quality=90,
     )
     print(f"Mosaic saved to {args.output}")
@@ -182,9 +181,6 @@ def main() -> None:
         type=str,
         default=None,
         help="Load pre-computed 2D coords from .npy",
-    )
-    mosaic_parser.add_argument(
-        "--show", action="store_true", help="Display mosaic after rendering"
     )
 
     args = parser.parse_args()

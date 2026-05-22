@@ -12,7 +12,6 @@ def render_mosaic(
     canvas_height: int = 2000,
     thumb_size: int = 50,
     output_path: Path | None = None,
-    show: bool = False,
     jpeg_quality: int = 90,
 ) -> Image.Image:
     grid_cols = canvas_width // thumb_size
@@ -40,8 +39,5 @@ def render_mosaic(
             canvas.save(output_path, quality=jpeg_quality, optimize=True)
         else:
             canvas.save(output_path)
-
-    if show:
-        canvas.show()
 
     return canvas
