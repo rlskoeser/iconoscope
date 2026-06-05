@@ -133,9 +133,9 @@ def extract_features(
     features_list: list[np.ndarray] = []
     iterator = tqdm(loader, desc="Extracting features") if show_progress else loader
     for batch in iterator:
-        if batch is None:
-            continue
         imgs, _ = batch
+        if imgs is None:
+            continue
         imgs = imgs.to(torch_device)
         with torch.no_grad():
             feats = backbone(imgs)
