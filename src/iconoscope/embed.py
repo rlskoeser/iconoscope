@@ -2,12 +2,25 @@ from __future__ import annotations
 
 import sys
 import warnings
+from enum import StrEnum
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
+
+
+class EmbedModel(StrEnum):
+    DINOV2 = "dinov2"
+    DINOV3 = "dinov3"
+    CLIP = "clip"
+
+
+_HF_MODEL_IDS: dict[EmbedModel, str] = {
+    EmbedModel.DINOV2: "facebook/dinov2-base",
+    EmbedModel.DINOV3: "facebook/dinov3-vitb16-pretrain-lvd1689m",
+}
 
 
 class _ImageDataset(Dataset):
@@ -38,15 +51,19 @@ def collate_fn(batch):
     return torch.stack(imgs), list(idxs)
 
 
-def _build_backbone(backend: str, device: str) -> object:
-    import torch.nn as nn
-
+def _load_backend(backend: str, device) -> tuple[object, object]:
+    """Return (backbone, transform) for the given backend."""
     match backend:
-        case "resnet50":
-            from torchvision.models import resnet50, ResNet50_Weights
-            model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
-            backbone = nn.Sequential(*list(model.children())[:-2])
-        case "clip":
+        case EmbedModel.DINOV2 | EmbedModel.DINOV3:
+            try:
+                from transformers import AutoImageProcessor, AutoModel
+            except ImportError:
+                raise SystemExit("Error: DINO models require: pip install 'transformers>=4.56.0'")
+            model_id = _HF_MODEL_IDS[backend]
+            processor = AutoImageProcessor.from_pretrained(model_id)
+            backbone = AutoModel.from_pretrained(model_id)
+            transform = lambda img: processor(images=img, return_tensors="pt")["pixel_values"][0]
+        case EmbedModel.CLIP:
             try:
                 import clip
             except ImportError:
@@ -54,45 +71,20 @@ def _build_backbone(backend: str, device: str) -> object:
                     "Error: CLIP backend requires: "
                     "pip install git+https://github.com/openai/CLIP.git"
                 )
-            model, _ = clip.load("ViT-B/32", device=device)
-            backbone = model.visual
+            backbone, transform = clip.load("ViT-B/32", device=device)
+            backbone = backbone.visual
         case _:
             raise ValueError(f"Unknown backend: {backend!r}")
     backbone = backbone.to(device).float().eval()
     for p in backbone.parameters():
         p.requires_grad_(False)
-    return backbone
-
-
-def _get_transform(backend: str) -> object:
-    import torchvision.transforms as T
-
-    match backend:
-        case "resnet50":
-            return T.Compose([
-                T.Resize(256),
-                T.CenterCrop(224),
-                T.ToTensor(),
-                T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ])
-        case "clip":
-            return T.Compose([
-                T.Resize(224, interpolation=T.InterpolationMode.BICUBIC),
-                T.CenterCrop(224),
-                T.ToTensor(),
-                T.Normalize(
-                    mean=[0.48145466, 0.4578275, 0.40821073],
-                    std=[0.26862954, 0.26130258, 0.27577711],
-                ),
-            ])
-        case _:
-            raise ValueError(f"Unknown backend: {backend!r}")
+    return backbone, transform
 
 
 def run_embed(
     image_dir: Path,
     output: Path,
-    backend: str = "resnet50",
+    model: EmbedModel = EmbedModel.DINOV2,
     batch_size: int = 64,
     ext: str | None = None,
     device: str = "auto",
@@ -112,7 +104,7 @@ def run_embed(
 
     features, paths = extract_features(
         image_paths,
-        backend=backend,
+        model=model,
         batch_size=batch_size,
         device=device,
         show_progress=show_progress,
@@ -125,7 +117,7 @@ def run_embed(
 
 def extract_features(
     image_paths: list[Path],
-    backend: str = "resnet50",
+    model: EmbedModel = EmbedModel.DINOV2,
     batch_size: int = 64,
     device: str = "auto",
     num_workers: int = 4,
@@ -144,8 +136,7 @@ def extract_features(
         device_str = device
     torch_device = torch.device(device_str)
 
-    backbone = _build_backbone(backend, torch_device)
-    transform = _get_transform(backend)
+    backbone, transform = _load_backend(model, torch_device)
 
     valid_paths: list[Path] = []
     for p in image_paths:
@@ -176,9 +167,11 @@ def extract_features(
             continue
         imgs = imgs.to(torch_device)
         with torch.no_grad():
-            feats = backbone(imgs)
-            if backend == "resnet50":
-                feats = feats.mean(dim=[2, 3])
+            match model:
+                case EmbedModel.DINOV2 | EmbedModel.DINOV3:
+                    feats = backbone(pixel_values=imgs).pooler_output
+                case EmbedModel.CLIP:
+                    feats = backbone(imgs)
         feats = feats / feats.norm(dim=1, keepdim=True)
         features_list.append(feats.cpu().numpy())
 

@@ -14,12 +14,19 @@ dependencies = [
     "scikit-learn",
     "torch",
     "torchvision",
+    "transformers>=4.56.0",
     "tqdm",
 ]
 
 [project.optional-dependencies]
 umap = ["umap-learn"]
 clip = ["clip @ git+https://github.com/openai/CLIP.git"]
+
+[dependency-groups]
+dev = [
+    "umap-learn",
+    "clip @ git+https://github.com/openai/CLIP.git",
+]
 
 [project.scripts]
 iconoscope = "iconoscope.cli:main"

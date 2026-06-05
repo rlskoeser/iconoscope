@@ -10,7 +10,7 @@ from sklearn.manifold import TSNE
 def reduce_to_2d(
     features: np.ndarray,
     pca_dims: int | None = 50,
-    backend: str = "tsne",
+    reducer: str = "tsne",
     perplexity: float | None = None,
     random_state: int = 42,
 ) -> np.ndarray:
@@ -24,7 +24,7 @@ def reduce_to_2d(
     if perplexity is None:
         perplexity = min(50, max(5, int(sqrt(N))))
 
-    if backend == "tsne":
+    if reducer == "tsne":
         perplexity = min(perplexity, N - 1)
         if perplexity < 1:
             raise ValueError(f"Too few images ({N}) for t-SNE; need at least 2.")
@@ -35,17 +35,17 @@ def reduce_to_2d(
             init="pca",
             learning_rate="auto",
         )
-    elif backend == "umap":
+    elif reducer == "umap":
         try:
             import umap
         except ImportError:
-            raise ImportError("UMAP backend requires `pip install umap-learn`")
+            raise ImportError("UMAP reducer requires `pip install umap-learn`")
         reducer = umap.UMAP(
             n_components=2,
             random_state=random_state,
         )
     else:
-        raise ValueError(f"Unknown reducer backend: {backend!r}")
+        raise ValueError(f"Unknown reducer reducer: {reducer!r}")
 
     coords = reducer.fit_transform(features_2d)
     coords = coords - coords.min(axis=0)

@@ -49,7 +49,7 @@ def run_mosaic(
         if show_progress:
             print(f"Loaded 2D coordinates from {load_coords}")
     else:
-        coords = reduce_to_2d(features, backend=reducer, random_state=42)
+        coords = reduce_to_2d(features, reducer=reducer, random_state=42)
         if show_progress:
             print(f"Reduced to 2D with {reducer}")
 

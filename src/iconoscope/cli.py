@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from iconoscope.embed import run_embed
+from iconoscope.embed import EmbedModel, run_embed
 from iconoscope.mosaic import run_mosaic
 
 
@@ -19,11 +19,11 @@ def main() -> None:
         "-o", "--output", type=str, default="embeddings.npz", help="Output .npz path"
     )
     embed_parser.add_argument(
-        "--backend",
+        "--model",
         type=str,
-        default="resnet50",
-        choices=["resnet50", "clip"],
-        help="Feature backbone",
+        default=EmbedModel.DINOV3,
+        choices=list(EmbedModel),
+        help="Embedding model",
     )
     embed_parser.add_argument("--batch-size", type=int, default=64, help="Batch size")
     embed_parser.add_argument(
@@ -74,7 +74,7 @@ def main() -> None:
             run_embed(
                 image_dir=Path(args.image_dir),
                 output=Path(args.output),
-                backend=args.backend,
+                model=args.model,
                 batch_size=args.batch_size,
                 ext=args.ext,
                 device=args.device,
