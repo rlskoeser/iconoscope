@@ -11,14 +11,7 @@ from iconoscope.embed import extract_features
 from iconoscope.layout import assign_grid
 from iconoscope.mosaic import render_mosaic
 from iconoscope.reduce import reduce_to_2d
-
-
-def find_images(image_dir: Path, ext: str | None = None) -> list[Path]:
-    if ext:
-        ext = ext.lstrip('.')   # ensure extension has one and only one .
-        return sorted(image_dir.rglob(f"*.{ext}"))
-    extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-    return [p for p in sorted(image_dir.rglob("*")) if p.suffix.lower() in extensions]
+from iconoscope.utils import find_images
 
 
 def cmd_embed(args: argparse.Namespace) -> None:
