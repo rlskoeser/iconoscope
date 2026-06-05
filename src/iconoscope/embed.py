@@ -41,7 +41,7 @@ class _ImageDataset(Dataset):
 
 
 
-def collate_fn(batch):
+def _collate_fn(batch):
     import torch
 
     batch = [(img, idx) for img, idx in batch if img is not None]
@@ -155,7 +155,7 @@ def extract_features(
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        collate_fn=collate_fn,
+        _collate_fn=_collate_fn,
         pin_memory=(device_str == "cuda"),
     )
 

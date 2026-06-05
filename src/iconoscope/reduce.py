@@ -17,9 +17,9 @@ def reduce_to_2d(
     N = features.shape[0]
     if pca_dims is not None and pca_dims < features.shape[1]:
         pca = PCA(n_components=pca_dims, random_state=random_state)
-        features_2d = pca.fit_transform(features)
+        features_reduced = pca.fit_transform(features)
     else:
-        features_2d = features
+        features_reduced = features
 
     if perplexity is None:
         perplexity = min(50, max(5, int(sqrt(N))))
@@ -47,7 +47,7 @@ def reduce_to_2d(
     else:
         raise ValueError(f"Unknown reducer reducer: {reducer!r}")
 
-    coords = reducer.fit_transform(features_2d)
+    coords = reducer.fit_transform(features_reduced)
     coords = coords - coords.min(axis=0)
     span = coords.max(axis=0)
     span[span == 0] = 1.0  # avoid division by zero if all points share an axis value

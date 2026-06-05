@@ -41,6 +41,8 @@ def assign_grid(
         if full_grid_algo == "hungarian":
             if N > n_cells:
                 print(f"Warning: {N} images but only {n_cells} grid cells; {N - n_cells} images will not be placed.")
+            elif N < n_cells:
+                print(f"Note: {N} images for {n_cells} cells; {n_cells - N} cells will be empty.")
             cost = np.linalg.norm(
                 coords[:, np.newaxis, :] - cell_centers[np.newaxis, :, :],
                 axis=2,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from math import sqrt
 from pathlib import Path
 
@@ -100,8 +101,8 @@ def render_mosaic(
             x = c * thumb_w
             y = r * thumb_h
             canvas.paste(img, (x, y))
-        except Exception:
-            pass
+        except Exception as e:
+            warnings.warn(f"Failed to render thumbnail for {image_paths[img_idx]}: {e}")
 
     if output_path is not None:
         ext = output_path.suffix.lower()
