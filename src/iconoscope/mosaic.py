@@ -85,6 +85,7 @@ def render_mosaic(
     output_path: Path | None = None,
     jpeg_quality: int = 90,
 ) -> Image.Image:
+    """Paste thumbnails onto a blank canvas per assignments and optionally save; return the PIL Image."""
     grid_cols = canvas_width // thumb_size
     grid_rows = canvas_height // thumb_size
 

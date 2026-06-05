@@ -14,6 +14,7 @@ def reduce_to_2d(
     perplexity: float | None = None,
     random_state: int = 42,
 ) -> np.ndarray:
+    """Optional PCA pre-reduction, then t-SNE/UMAP; returns float32 coords normalised to [0,1]²."""
     N = features.shape[0]
     if pca_dims is not None and pca_dims < features.shape[1]:
         pca = PCA(n_components=pca_dims, random_state=random_state)
@@ -22,7 +23,7 @@ def reduce_to_2d(
         features_reduced = features
 
     if perplexity is None:
-        perplexity = min(50, max(5, int(sqrt(N))))
+        perplexity = min(50, max(5, int(sqrt(N))))  # sqrt(N) heuristic; clamped to [5, 50]
 
     if reducer == "tsne":
         perplexity = min(perplexity, N - 1)

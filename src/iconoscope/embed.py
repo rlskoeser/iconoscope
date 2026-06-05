@@ -123,6 +123,7 @@ def extract_features(
     num_workers: int = 4,
     show_progress: bool = True,
 ) -> tuple[np.ndarray, list[Path]]:
+    """Extract embedding vectors from image_paths; return (features float32 [N,D], valid_paths)."""
     import torch
 
     if device == "auto":
@@ -148,14 +149,14 @@ def extract_features(
             warnings.warn(f"Skipping {p}: {e}")
 
     if device_str == "mps":
-        num_workers = 0
+        num_workers = 0  # MPS + multiprocessing fork causes hangs
 
     loader = DataLoader(
         _ImageDataset(valid_paths, transform),
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        _collate_fn=_collate_fn,
+        collate_fn=_collate_fn,
         pin_memory=(device_str == "cuda"),
     )
 
@@ -172,7 +173,7 @@ def extract_features(
                     feats = backbone(pixel_values=imgs).pooler_output
                 case EmbedModel.CLIP:
                     feats = backbone(imgs)
-        feats = feats / feats.norm(dim=1, keepdim=True)
+        feats = feats / feats.norm(dim=1, keepdim=True)  # L2 normalise to unit sphere
         features_list.append(feats.cpu().numpy())
 
     features = np.concatenate(features_list, axis=0).astype(np.float32)

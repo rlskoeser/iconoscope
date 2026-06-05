@@ -12,6 +12,7 @@ def assign_grid(
     method: str = "full_grid",
     full_grid_algo: str = "auto",
 ) -> dict[tuple[int, int], int]:
+    """Map normalised 2D coords to grid cells; return {(row, col): image_index}."""
     N = coords.shape[0]
     n_cells = grid_cols * grid_rows
 
@@ -47,7 +48,7 @@ def assign_grid(
                 coords[:, np.newaxis, :] - cell_centers[np.newaxis, :, :],
                 axis=2,
             )
-            row_ind, col_ind = linear_sum_assignment(cost[:n_cells, :n_cells])
+            row_ind, col_ind = linear_sum_assignment(cost[:n_cells, :n_cells])  # square input required; truncates when N != n_cells
             assignments = {}
             for cell_idx, img_idx in zip(col_ind, row_ind):
                 r, c = int(grid_cells[cell_idx][0]), int(grid_cells[cell_idx][1])
