@@ -102,6 +102,8 @@ def run_embed(
     if show_progress:
         print(f"Found {len(image_paths)} images")
 
+    from iconoscope.cache import save_embeddings
+
     features, paths = extract_features(
         image_paths,
         model=model,
@@ -109,8 +111,7 @@ def run_embed(
         device=device,
         show_progress=show_progress,
     )
-    path_strings = np.array([str(p) for p in paths])
-    np.savez(output, features=features, paths=path_strings)
+    save_embeddings(output, model, features, paths)
     if show_progress:
         print(f"Saved embeddings ({features.shape[0]} images, {features.shape[1]} dims) to {output}")
 

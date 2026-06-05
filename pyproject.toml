@@ -16,6 +16,7 @@ dependencies = [
     "torchvision",
     "transformers>=4.56.0",
     "tqdm",
+    "h5py",
 ]
 
 [project.optional-dependencies]

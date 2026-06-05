@@ -14,23 +14,24 @@ from iconoscope.reduce import reduce_to_2d
 def run_mosaic(
     embeddings: Path,
     output: Path,
+    model: str = "dinov2",
     reducer: str = "tsne",
     layout: str = "full_grid",
     width: int = 2000,
     height: int = 2000,
     thumb_size: int | str = 50,
-    load_coords: Path | None = None,
-    save_coords: Path | None = None,
+    load_coords: bool = True,
+    save_coords: bool = True,
     jpeg_quality: int = 90,
     show_progress: bool = True,
 ) -> None:
-    data = np.load(embeddings, allow_pickle=False)
-    features = data["features"]
-    image_paths = [Path(str(p)) for p in data["paths"]]
+    from iconoscope import cache
+
+    features, image_paths = cache.load_embeddings(embeddings, model)
     N = features.shape[0]
 
     if show_progress:
-        print(f"Loaded {N} embeddings from {embeddings}")
+        print(f"Loaded {N} embeddings ({model}) from {embeddings}")
 
     if thumb_size == "auto":
         # 1.1 ensures grid cells < N after integer division, so every cell gets filled
@@ -45,19 +46,18 @@ def run_mosaic(
         print(f"Warning: only {N} images but grid has {n_cells} cells. "
               "Consider --thumb-size auto, increasing --thumb-size, or reducing --width/--height.")
 
-    if load_coords is not None:
-        coords = np.load(load_coords)
+    coords = cache.load_coords(embeddings, reducer) if load_coords else None
+    if coords is not None:
         if show_progress:
-            print(f"Loaded 2D coordinates from {load_coords}")
+            print(f"Loaded cached {reducer} coordinates from {embeddings}")
     else:
         coords = reduce_to_2d(features, reducer=reducer, random_state=42)
         if show_progress:
             print(f"Reduced to 2D with {reducer}")
-
-    if save_coords is not None:
-        np.save(save_coords, coords)
-        if show_progress:
-            print(f"Saved 2D coordinates to {save_coords}")
+        if save_coords:
+            cache.save_coords(embeddings, reducer, coords)
+            if show_progress:
+                print(f"Cached {reducer} coordinates in {embeddings}")
 
     assignments = assign_grid(coords, grid_cols=grid_cols, grid_rows=grid_rows, method=layout)
     if show_progress:
