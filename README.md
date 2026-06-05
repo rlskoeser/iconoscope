@@ -1,6 +1,11 @@
 # iconoscope
 
-Extract CNN/ViT features from images and render a 2D t-SNE/UMAP mosaic. Inspired by [Andrej Karpathy's CNN embedding visualizer](https://cs.stanford.edu/people/karpathy/cnnembed/).
+`iconoscope` is a python library for working with images based on image embeddings extracted from models like CLIP and DINOv2/3. Currently it supports generating embeddings from a selected model, and then generating a static mosaic where image thumbnails are placed based on nearest neighbor with dimensionality reduction (UMAP or tSNE).
+
+The name **iconoscope** comes from the Greek words for image (εἰκών) and to look at or see (σκοπεῖν). The iconoscope 
+"was the first practical video camera tube to be used in early television cameras" ([Wikipedia](https://en.wikipedia.org/wiki/Iconoscope)).
+
+This package was inspired by [Andrej Karpathy's CNN embedding visualizer](https://cs.stanford.edu/people/karpathy/cnnembed/), and start as a port of Karpathy's cnnembed Matlab code to Python with Claude Code.
 
 ## Install
 
