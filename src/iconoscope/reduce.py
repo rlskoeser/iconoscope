@@ -25,6 +25,9 @@ def reduce_to_2d(
         perplexity = min(50, max(5, int(sqrt(N))))
 
     if backend == "tsne":
+        perplexity = min(perplexity, N - 1)
+        if perplexity < 1:
+            raise ValueError(f"Too few images ({N}) for t-SNE; need at least 2.")
         reducer = TSNE(
             n_components=2,
             perplexity=perplexity,

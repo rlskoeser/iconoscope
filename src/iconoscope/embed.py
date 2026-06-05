@@ -121,6 +121,9 @@ def extract_features(
         except Exception as e:
             warnings.warn(f"Skipping {p}: {e}")
 
+    if device_str == "mps":
+        num_workers = 0
+
     loader = DataLoader(
         _ImageDataset(valid_paths, transform),
         batch_size=batch_size,
