@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import warnings
 from pathlib import Path
 
@@ -86,6 +87,40 @@ def _get_transform(backend: str) -> object:
             ])
         case _:
             raise ValueError(f"Unknown backend: {backend!r}")
+
+
+def run_embed(
+    image_dir: Path,
+    output: Path,
+    backend: str = "resnet50",
+    batch_size: int = 64,
+    ext: str | None = None,
+    device: str = "auto",
+    show_progress: bool = True,
+) -> None:
+    from iconoscope.utils import find_images
+
+    if not image_dir.is_dir():
+        sys.exit(f"error: {image_dir} is not a directory")
+
+    image_paths = find_images(image_dir, ext)
+    if not image_paths:
+        sys.exit(f"error: no images found in {image_dir}")
+
+    if show_progress:
+        print(f"Found {len(image_paths)} images")
+
+    features, paths = extract_features(
+        image_paths,
+        backend=backend,
+        batch_size=batch_size,
+        device=device,
+        show_progress=show_progress,
+    )
+    path_strings = np.array([str(p) for p in paths])
+    np.savez(output, features=features, paths=path_strings)
+    if show_progress:
+        print(f"Saved embeddings ({features.shape[0]} images, {features.shape[1]} dims) to {output}")
 
 
 def extract_features(
