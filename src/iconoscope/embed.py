@@ -24,9 +24,10 @@ _HF_MODEL_IDS: dict[EmbedModel, str] = {
 
 
 class _ImageDataset(Dataset):
-    def __init__(self, paths: list[Path], transform):
+    def __init__(self, paths: list[Path], transform, center_crop: float = 0.0):
         self.paths = paths
         self.transform = transform
+        self.center_crop = center_crop
 
     def __len__(self):
         return len(self.paths)
@@ -35,6 +36,11 @@ class _ImageDataset(Dataset):
         path = self.paths[idx]
         try:
             img = Image.open(path).convert("RGB")
+            if self.center_crop > 0.0:
+                w, h = img.size
+                cw, ch = int(w * self.center_crop), int(h * self.center_crop)
+                left, top = (w - cw) // 2, (h - ch) // 2
+                img = img.crop((left, top, left + cw, top + ch))
             return self.transform(img), idx
         except Exception:
             return None, idx
@@ -88,6 +94,7 @@ def run_embed(
     batch_size: int = 64,
     ext: str | None = None,
     device: str = "auto",
+    center_crop: float = 0.0,
     show_progress: bool = True,
 ) -> None:
     from iconoscope.utils import find_images
@@ -109,6 +116,7 @@ def run_embed(
         model=model,
         batch_size=batch_size,
         device=device,
+        center_crop=center_crop,
         show_progress=show_progress,
     )
     save_embeddings(output, model, features, paths)
@@ -122,6 +130,7 @@ def extract_features(
     batch_size: int = 64,
     device: str = "auto",
     num_workers: int = 4,
+    center_crop: float = 0.0,
     show_progress: bool = True,
 ) -> tuple[np.ndarray, list[Path]]:
     """Extract embedding vectors from image_paths; return (features float32 [N,D], valid_paths)."""
@@ -153,7 +162,7 @@ def extract_features(
         num_workers = 0  # MPS + multiprocessing fork causes hangs
 
     loader = DataLoader(
-        _ImageDataset(valid_paths, transform),
+        _ImageDataset(valid_paths, transform, center_crop=center_crop),
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,

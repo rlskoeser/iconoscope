@@ -64,6 +64,15 @@ def load_coords(path: Path, reducer: str) -> np.ndarray | None:
         return f[name][:]
 
 
+def load_paths(path: Path) -> list[Path]:
+    """Load image paths from an HDF5 file."""
+    import h5py
+
+    with h5py.File(path, "r") as f:
+        paths_raw = f["paths"][:]
+    return [Path(p.decode() if isinstance(p, bytes) else p) for p in paths_raw]
+
+
 def describe(path: Path) -> dict:
     """Return a summary dict of what is stored in an HDF5 embeddings file."""
     import h5py
@@ -79,4 +88,15 @@ def describe(path: Path) -> dict:
             {"reducer": k[len("coords_"):], "shape": tuple(f[k].shape)}
             for k in keys if k.startswith("coords_")
         ]
-    return {"n_images": n_images, "features": features, "coords": coords}
+        clusters = []
+        for k in keys:
+            if k.startswith("clusters_"):
+                rest = k[len("clusters_"):]
+                model_part, _, k_part = rest.rpartition("_")
+                clusters.append({
+                    "dataset": k,
+                    "model": model_part or rest,
+                    "k": int(k_part) if k_part.isdigit() else "?",
+                    "n": int(f[k].shape[0]),
+                })
+    return {"n_images": n_images, "features": features, "coords": coords, "clusters": clusters}
