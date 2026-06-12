@@ -12,7 +12,7 @@ def reduce_to_2d(
     pca_dims: int | None = 50,
     reducer: str = "tsne",
     perplexity: float | None = None,
-    random_state: int = 42,
+    random_state: int | None = None,
 ) -> np.ndarray:
     """Optional PCA pre-reduction, then t-SNE/UMAP; returns float32 coords normalised to [0,1]²."""
     N = features.shape[0]
