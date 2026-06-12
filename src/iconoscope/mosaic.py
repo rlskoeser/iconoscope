@@ -34,8 +34,9 @@ def run_mosaic(
         print(f"Loaded {N} embeddings ({model}) from {embeddings}")
 
     if thumb_size == "auto":
-        # 1.1 ensures grid cells < N after integer division, so every cell gets filled
-        thumb_size = max(1, int(sqrt(width * height / N) * 1.1))
+        thumb_size = max(1, int(sqrt(width * height / N)))
+        while (width // thumb_size) * (height // thumb_size) < N:
+            thumb_size -= 1
         if show_progress:
             print(f"Auto thumb size: {thumb_size}px")
 
