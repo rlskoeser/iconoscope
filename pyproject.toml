@@ -1,0 +1,17 @@
+[project]
+name = "iconoscope"
+version = "0.2.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "rlskoeser", email = "rebecca.s.koeser@princeton.edu" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+iconoscope = "iconoscope:main"
+
+[build-system]
+requires = ["uv_build>=0.11.16,<0.12.0"]
+build-backend = "uv_build"
