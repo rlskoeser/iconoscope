@@ -1,3 +1,4 @@
+import math
 import warnings
 from pathlib import Path
 
@@ -61,7 +62,7 @@ def assign_to_grid(
         square_coords = coords[:n_cells]
         # warn if grid size results in any images being omitted
         if n_items > n_cells:
-            print("Warning: omitting {n_cells - n_items:,} images from the grid")
+            print(f"Warning: omitting {n_items - n_cells:,} images from the grid")
 
     # determine aspect ratio for the requested grid
     aspect = grid_cols / grid_rows
@@ -88,14 +89,23 @@ def assign_to_grid(
     }
 
 
+MIN_THUMB_SIZE = 20
+MAX_THUMB_SIZE = 350
+
+
 def generate_mosaic(
     embeddings_path: Path,
     output: Path | None = None,
     width: int = 2000,
     height: int = 2000,
-    thumb_size: int = 50,
     jpeg_quality: int = 90,
 ) -> None:
+    """Generate a mosaic of images based on previous calculated image embeddings.
+    Load image feature vectors from the embeddings parquet file, reduce with PCA+UMAP,
+    update parquet file with umap coordinates, then assign to grid slots and create
+    a mosaic image of thumbnails.
+    """
+
     if output is None:
         output = embeddings_path.with_suffix(".jpg")
 
@@ -112,13 +122,30 @@ def generate_mosaic(
 
     paths = df["image_path"].to_list()
 
-    # determine number of grid slots based on the image size
+    # determine ideal thumbnail size based on mosaic size and number of images
+    n_images = df.height
+    # round to integer since we need pixel size; don't go beyond predefined max/min sizes
+    thumb_size = max(
+        MIN_THUMB_SIZE,
+        min(round(math.sqrt((width * height) / n_images)), MAX_THUMB_SIZE),
+    )
+    # in future, if adding support for non-square thumbnails, calculate based on aspect ratio
+    # thumb_w * thumb_h * N ≈ W * H
+    # Fix the aspect ratio r = thumb_w / thumb_h, substitute thumb_w = r * thumb_h, and solve:
+    # thumb_h = sqrt((W * H) / (N * r))
+    # thumb_w = r * thumb_h
+
+    # determine number of grid slots based on the desired image size
     grid_cols = width // thumb_size
     grid_rows = height // thumb_size
+    # determine actual size based on determined thumbnail size and use that for the mosaic canvas
+    actual_width = grid_cols * thumb_size
+    actual_height = grid_rows * thumb_size
+
     assignments = assign_to_grid(df["umap"].to_numpy(), grid_cols, grid_rows)
 
-    # create a blank canvas for the requested size
-    canvas = Image.new("RGB", (width, height), color=(255, 255, 255))
+    # create a blank canvas for the calculated size
+    canvas = Image.new("RGB", (actual_width, actual_height), color=(255, 255, 255))
     for (row, col), img_idx in assignments.items():
         try:
             # open the image and resize to desired thumbnail size

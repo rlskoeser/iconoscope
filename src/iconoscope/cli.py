@@ -17,7 +17,6 @@ def main_mosaic(args: argparse.Namespace):
         output=args.output,
         width=args.width,
         height=args.height,
-        thumb_size=args.thumb_size,
         jpeg_quality=args.jpeg_quality,
     )
 
