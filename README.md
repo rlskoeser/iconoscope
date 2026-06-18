@@ -1,84 +1,72 @@
 # iconoscope
 
-`iconoscope` is a python library for working with images based on image embeddings extracted from models like CLIP and DINOv2/3. Currently it supports generating embeddings from a selected model, and then generating a static mosaic where image thumbnails are placed based on nearest neighbor with dimensionality reduction (UMAP or tSNE).
+`iconoscope` is a python package for exploring image collections using visual similarity based on image embeddings extracted from models like CLIP and DINOv2/3. Embeddings can be used to generate a mosaic where visually similar images appear near each other, or for interactive exploration in a preliminary HTML viewer.
 
-The name **iconoscope** comes from the Greek words for image (εἰκών) and to look at or see (σκοπεῖν). The iconoscope 
-"was the first practical video camera tube to be used in early television cameras" ([Wikipedia](https://en.wikipedia.org/wiki/Iconoscope)).
+The name **iconoscope** comes from the Greek words for _image_ (εἰκών) and _to see_ (σκοπεῖν). The [iconoscope](https://en.wikipedia.org/wiki/Iconoscope) was the first practical video camera tube used in early television cameras.
 
-This package was inspired by [Andrej Karpathy's CNN embedding visualizer](https://cs.stanford.edu/people/karpathy/cnnembed/), and start as a port of Karpathy's cnnembed Matlab code to Python with Claude Code.
+This package was inspired by [Andrej Karpathy's CNN embedding visualizer](https://cs.stanford.edu/people/karpathy/cnnembed/). Version 0.1 started as a python port of Karpathy's cnnembed Matlab code created with Claude Code.
 
 ## Install
 
-```
+```bash
 pip install -e .
-```
-
-Optional backends:
-
-```
 pip install -e ".[umap]"   # UMAP reducer
 pip install -e ".[clip]"   # CLIP embedding backend
 ```
 
+Or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv sync
+uv sync --extra umap
+```
+
 ## Usage
 
-Two-stage pipeline that separates feature extraction from mosaic rendering.
+Two-stage pipeline: embed first (slow, GPU-accelerated), then mosaic (fast, iterate freely).
 
-### 1. Embed — extract CNN features
+### 1. Embed
 
-```
-iconoscope embed ./my_images/ -o embeddings.npz
-```
+Extract features from a directory of images and save to an HDF5 file:
 
-| Flag | Default | Description |
-|---|---|---|
-| `image_dir` | (required) | Directory of input images |
-| `-o, --output` | `embeddings.npz` | Output `.npz` path |
-| `--backend` | `resnet50` | `resnet50` or `clip` |
-| `--batch-size` | `64` | Inference batch size |
-| `--device` | `auto` | `auto`, `cpu`, `cuda`, `mps` |
-
-Scans the directory for images (`.jpg`, `.jpeg`, `.png`, `.webp`, `.bmp`), extracts 2048-d ResNet50 features (or 512-d CLIP), L2-normalizes, and saves to a documented `.npz` format.
-
-### 2. Mosaic — render layout
-
-```
-iconoscope mosaic embeddings.npz -o mosaic.jpg --save-coords coords.npy
+```bash
+iconoscope embed ./images/ mycollection.h5
 ```
 
-| Flag | Default | Description |
-|---|---|---|
-| `embeddings` | (required) | `.npz` file from the embed step |
-| `-o, --output` | `mosaic.jpg` | Output image path |
-| `--reducer` | `tsne` | `tsne` or `umap` |
-| `--layout` | `full_grid` | `full_grid` (no gaps) or `first_come` (fast) |
-| `--width` | `2000` | Canvas width in pixels |
-| `--height` | `2000` | Canvas height in pixels |
-| `--thumb-size` | `50` | Thumbnail size in pixels, or `auto` to fit all images |
-| `--save-coords` | — | Save 2D coords to `.npy` |
-| `--load-coords` | — | Skip reduction, load coords from `.npy` |
-| `--show` | — | Display mosaic after rendering |
+### 2. Mosaic
 
-### 3. Iterate layout without re-reducing
+Reduce embeddings to 2D and render a mosaic image:
 
-```
-iconoscope mosaic embeddings.npz -o mosaic_preview.jpg \
-    --load-coords coords.npy --layout first_come --thumb-size 30
+```bash
+iconoscope mosaic mycollection.h5
 ```
 
-## Embeddings file format
+Output defaults to `mycollection.jpg`. Coordinates are cached in the HDF5 file so subsequent runs skip the slow dimensionality reduction step.
 
-Standard NumPy `.npz` with two arrays:
+### 3. Viewer
 
-| Key | dtype | Shape | Description |
-|---|---|---|---|
-| `features` | `float32` | `(N, D)` | L2-normalized feature vectors |
-| `paths` | `str` / `U` | `(N,)` | Image paths matching each row |
+Generate an interactive HTML viewer:
 
-Compatible with any tool that produces this schema (e.g. a different model or language), as long as the dtype and key names match.
+```bash
+iconoscope viewer mycollection.h5
+```
 
-## Notes
+Writes `mycollection.html`. Requires a pre-built Svelte app (`cd viewer && npm install && npm run build`).
 
-- `full_grid` uses Hungarian assignment (globally optimal) for ≤5000 cells, KD-tree greedy beyond that
-- `first_come` is fast but may leave gaps
-- Thumbnail size auto-adjusts upward when there are fewer images than grid cells
+### Other commands
+
+```bash
+iconoscope info mycollection.h5          # inspect what's stored in an embeddings file
+iconoscope cluster mycollection.h5 -k 12 # k-means clustering on embeddings
+```
+
+## Embeddings file
+
+The `.h5` file is the hand-off between pipeline stages. It holds:
+
+- `features` — L2-normalized float32 embeddings `[N, D]`
+- `paths` — image paths `[N]`
+- `coords` — cached 2D coordinates `[N, 2]` (written after the first mosaic run)
+- cluster assignments (written by `cluster`)
+
+Run `iconoscope info` to inspect the contents of any embeddings file.
