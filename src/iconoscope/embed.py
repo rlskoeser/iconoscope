@@ -18,9 +18,16 @@ class ImageDataset(IterableDataset):
             self.img_extensions = extensions
 
     def __iter__(self):
-        # if only single img extension, could use in rglob
-        for file_path in self.base_dir.rglob("*.*"):
-            if file_path.suffix.lower() in self.img_extensions:
+        # by default, find all files with an extension and then filter by suffix
+        rglob_pattern = "*.*"
+        # if only a single extension, look for just that file type with rglob
+        single_ext = len(self.img_extensions) == 1
+        if single_ext:
+            rglob_pattern = f"*{list(self.img_extensions)[0]}"
+
+        for file_path in self.base_dir.rglob(rglob_pattern):
+            # return if found by single extension or if suffix is in the list
+            if single_ext or file_path.suffix.lower() in self.img_extensions:
                 # TODO: still needs error handling
                 img = Image.open(file_path).convert("RGB")
                 # yield a tuple of image object and file path as string
