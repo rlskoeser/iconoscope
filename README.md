@@ -9,16 +9,23 @@ This package was inspired by [Andrej Karpathy's CNN embedding visualizer](https:
 ## Install
 
 ```bash
-pip install -e .
-pip install -e ".[umap]"   # UMAP reducer
-pip install -e ".[clip]"   # CLIP embedding backend
+pip install iconoscope
+pip install "iconoscope[umap]"   # include UMAP reducer
 ```
 
 Or with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv sync
-uv sync --extra umap
+uv add iconoscope
+uv add "iconoscope[umap]"
+```
+
+### CLIP backend
+
+The CLIP embedding backend is not available on PyPI and must be installed separately:
+
+```bash
+pip install git+https://github.com/openai/CLIP.git
 ```
 
 ## Usage
