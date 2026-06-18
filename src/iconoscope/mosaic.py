@@ -88,8 +88,8 @@ def assign_to_grid(
     }
 
 
-def run_mosaic(
-    embeddings: Path,
+def generate_mosaic(
+    embeddings_path: Path,
     output: Path | None = None,
     width: int = 2000,
     height: int = 2000,
@@ -97,35 +97,38 @@ def run_mosaic(
     jpeg_quality: int = 90,
 ) -> None:
     if output is None:
-        output = embeddings.with_suffix(".jpg")
+        output = embeddings_path.with_suffix(".jpg")
 
-    coords_path = embeddings.with_suffix(".coords.parquet")
-
-    df = pl.read_parquet(embeddings)
-    paths = df["image_path"].to_list()
-    features = np.array(df["features"].to_list(), dtype=np.float32)
-
-    if coords_path.exists():
-        print(f"Loading cached coords from {coords_path}")
-        coords = pl.read_parquet(coords_path).to_numpy().astype(np.float32)
+    # load image embeddings from saved parquet file
+    df = pl.read_parquet(embeddings_path)
+    # if coordinates have not already been calculated, reduce and store results
+    if "umap" not in df.columns:
+        print(f"Running UMAP on {df.height} image embeddings…")
+        df = df.with_columns(umap=reduce_features(df["features"].to_numpy()))
+        print(f"Updated {embeddings_path} with UMAP coordinates")
+        df.write_parquet(embeddings_path)  # save the result
     else:
-        print(f"Running UMAP on {len(paths)} images…")
-        coords = reduce_features(features)
-        pl.DataFrame(coords, schema=["x", "y"]).write_parquet(coords_path)
-        print(f"Saved coords to {coords_path}")
+        print(f"Using existing UMAP coordinates in {embeddings_path}")
 
+    paths = df["image_path"].to_list()
+
+    # determine number of grid slots based on the image size
     grid_cols = width // thumb_size
     grid_rows = height // thumb_size
-    assignments = assign_to_grid(coords, grid_cols, grid_rows)
+    assignments = assign_to_grid(df["umap"].to_numpy(), grid_cols, grid_rows)
 
+    # create a blank canvas for the requested size
     canvas = Image.new("RGB", (width, height), color=(255, 255, 255))
     for (row, col), img_idx in assignments.items():
         try:
+            # open the image and resize to desired thumbnail size
             thumb = (
                 Image.open(paths[img_idx])
                 .convert("RGB")
                 .resize((thumb_size, thumb_size), Image.LANCZOS)
+                # resize with Lanczos (sinc) to minimize aliasing & artifacts
             )
+            # paste the thumbnail on the grid in the appropriate slot
             canvas.paste(thumb, (col * thumb_size, row * thumb_size))
         except Exception as exc:
             warnings.warn(f"Could not load {paths[img_idx]}: {exc}")

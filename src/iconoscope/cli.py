@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 
 from iconoscope.embed import extract_img_features
-from iconoscope.mosaic import run_mosaic
+from iconoscope.mosaic import generate_mosaic
 
 
 def main_embed(args: argparse.Namespace):
@@ -12,8 +12,8 @@ def main_embed(args: argparse.Namespace):
 
 
 def main_mosaic(args: argparse.Namespace):
-    run_mosaic(
-        embeddings=args.embeddings,
+    generate_mosaic(
+        embeddings_path=args.embeddings,
         output=args.output,
         width=args.width,
         height=args.height,
