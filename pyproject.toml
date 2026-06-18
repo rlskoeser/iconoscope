@@ -6,6 +6,18 @@ readme = "README.md"
 authors = [
     { name = "rlskoeser", email = "rebecca.s.koeser@princeton.edu" }
 ]
+license = {text = "Apache-2"}
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
 requires-python = ">=3.12"
 dependencies = [
     "numpy",
