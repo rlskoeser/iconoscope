@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from PIL import Image
 
 from iconoscope.embed import ImageDataset
@@ -7,7 +8,9 @@ from iconoscope.embed import ImageDataset
 def test_collate_returns_lists():
     imgs = [Image.new("RGB", (8, 8)), Image.new("RGB", (8, 8))]
     paths = ["/a/1.jpg", "/a/2.jpg"]
-    batch = list(zip(imgs, paths))
+    # batch is a list of tuples of image and image path
+    batch = [(imgs[i], paths[i]) for i in range(len(imgs))]
+    # collate returns list of images and list of image paths
     result_imgs, result_paths = ImageDataset.collate(batch)
     assert result_imgs == imgs
     assert result_paths == paths
