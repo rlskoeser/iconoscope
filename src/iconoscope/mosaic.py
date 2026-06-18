@@ -111,8 +111,8 @@ def assign_to_grid(
                 # stop looping as soon as grid cell is chosen
                 if chosen is not None:
                     break
-                # if nearest cells are already taken, double k and try again
-                k = min(k * 2, n_cells)
+                # if nearest cells are already taken, expand the search - quadruple k and try again
+                k = min(k * 4, n_cells)
             used.add(chosen)
             # add the chosen grid x,y as integers to the assignment dict for item index
             assignments[(int(grid_cells[chosen][0]), int(grid_cells[chosen][1]))] = (
