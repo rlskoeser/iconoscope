@@ -92,26 +92,29 @@ def assign_to_grid(
         }
 
     else:
+        # build spatial index of the grid cells for quick lookup of nearest cells
         tree = cKDTree(cell_centers * scale)
+        # scale image coordinates to the grid; omit any beyond number of available slots
+        # NOTE: important to truncate coords to n_cells or loop will never finish
         scaled_coords = coords[:n_cells] * scale
+        # keep track of grid cells as they are claimed
         used: set[int] = set()
+        # return structure, same as for lapjv: tuple of row,col in grid and image index
         assignments: dict[tuple[int, int], int] = {}
         k = min(n_cells, 50)
-        for item_idx in range(min(n_items, n_cells)):
-            # query k nearest cells; double k and retry if all are already occupied
+        for item_idx in range(len(scaled_coords)):
+            # query for the k nearest cells
             while True:
                 _, cell_indices = tree.query(scaled_coords[item_idx], k=k)
-                # tree.query returns a scalar when k=1, so normalise to iterable
-                indices = [cell_indices] if k == 1 else cell_indices
-                chosen = next((i for i in indices if i not in used), None)
+                # choose the first cell that is not already used
+                chosen = next((i for i in cell_indices if i not in used), None)
+                # stop looping as soon as grid cell is chosen
                 if chosen is not None:
                     break
-                if k == n_cells:
-                    break  # no free cell (shouldn't happen for n_items ≤ n_cells)
+                # if nearest cells are already taken, double k and try again
                 k = min(k * 2, n_cells)
-            if chosen is None:
-                continue
             used.add(chosen)
+            # add the chosen grid x,y as integers to the assignment dict for item index
             assignments[(int(grid_cells[chosen][0]), int(grid_cells[chosen][1]))] = (
                 item_idx
             )
