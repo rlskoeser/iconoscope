@@ -7,6 +7,8 @@ import polars as pl
 import umap
 from lap import lapjv
 from PIL import Image
+from scipy.spatial import cKDTree
+from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
 
 
@@ -27,12 +29,16 @@ def reduce_features(features: np.ndarray) -> np.ndarray:
     return (coords - min_coords) / span
 
 
+LAPJV_CELL_LIMIT = 5000
+
+
 def assign_to_grid(
     coords: np.ndarray, grid_cols: int, grid_rows: int
 ) -> dict[tuple[int, int], int]:
     """Given an array of x,y coordinates as returned from :meth:`reduce_features` and
     a grid size based on columns and rows, assign each item in the coordinates
-    array to a cell in the grid. Uses lapjv (Jonker-Volgenant) to determine the best fit.
+    array to a cell in the grid. Uses lapjv (Jonker-Volgenant) to determine the best fit
+    for grids up to LAPJV_CELL_LIMIT cells; falls back to greedy KD-tree for larger grids.
 
     Returns a dictionary of the grid assignment for each input item, based on index
     in the original coords array.
@@ -44,6 +50,10 @@ def assign_to_grid(
     # determine number of cells in the grid
     n_cells = grid_cols * grid_rows
 
+    # warn if grid size results in any images being omitted
+    if n_items > n_cells:
+        print(f"Warning: omitting {n_items - n_cells:,} images from the grid")
+
     # generate an array of grid coordinates for the requested grid size
     grid_cells = np.array(
         [(r, c) for r in range(grid_rows) for c in range(grid_cols)],
@@ -53,40 +63,59 @@ def assign_to_grid(
     cell_centers = (grid_cells + 0.5) / np.array(
         [[grid_rows, grid_cols]], dtype=np.float32
     )
-    # lapjv requires a square cost matrix; if there are more cells than items,
-    # add padding items to fill out the grid
-    if n_items < n_cells:
-        padding = np.full((n_cells - n_items, 2), 0.5, dtype=np.float32)
-        square_coords = np.vstack([coords, padding])
-    else:
-        square_coords = coords[:n_cells]
-        # warn if grid size results in any images being omitted
-        if n_items > n_cells:
-            print(f"Warning: omitting {n_items - n_cells:,} images from the grid")
-
     # determine aspect ratio for the requested grid
     aspect = grid_cols / grid_rows
     # scale the cell center coordinates based on the aspect ratio of the requested grid
     scale = np.array([[aspect, 1.0]], dtype=np.float32)
-    # build pairwise difference between cell centers and image coordinates, then
-    # collapse to get scalar distance for each pair; results in cost matrix input for lapjv
-    cost = np.linalg.norm(
-        (square_coords * scale)[:, np.newaxis] - (cell_centers * scale)[np.newaxis],
-        axis=2,
-    ).astype(np.float64)
 
-    # lap.lapjv returns a tuple of optional cost, reverse mapping, and column index.
-    # The column index is the assigned mapping: array of item indices in their assigned to cell
-    _, _, col_ind = lapjv(cost)
+    if n_cells <= LAPJV_CELL_LIMIT:
+        # lapjv requires a square cost matrix; if there are more cells than items,
+        # add padding items to fill out the grid
+        if n_items < n_cells:
+            padding = np.full((n_cells - n_items, 2), 0.5, dtype=np.float32)
+            square_coords = np.vstack([coords, padding])
+        else:
+            square_coords = coords[:n_cells]
 
-    # use lapvj column index to map back to column/row placement in the grid
-    return {
-        # take lapjv assigned slot for each image and map to grid position
-        # decompose the flat array of grid cells back into row,col format
-        (int(grid_cells[cell_idx][0]), int(grid_cells[cell_idx][1])): item_idx
-        for cell_idx, item_idx in enumerate(col_ind)
-        if item_idx < n_items  # omit any padding items needed to make square
-    }
+        # compute pairwise Euclidean distances to create cost matrix for lapjv
+        cost = cdist(square_coords * scale, cell_centers * scale).astype(np.float64)
+        # lap.lapjv returns a tuple of optional cost, reverse mapping, and column index.
+        # The column index is the assigned mapping: array of item indices assigned to each cell
+        _, _, col_ind = lapjv(cost)
+        # use lapjv column index to map back to column/row placement in the grid
+        return {
+            # take lapjv assigned slot for each image and map to grid position
+            # decompose the flat array of grid cells back into row,col format
+            (int(grid_cells[cell_idx][0]), int(grid_cells[cell_idx][1])): item_idx
+            for cell_idx, item_idx in enumerate(col_ind)
+            if item_idx < n_items  # omit any padding items needed to make square
+        }
+
+    else:
+        tree = cKDTree(cell_centers * scale)
+        scaled_coords = coords[:n_cells] * scale
+        used: set[int] = set()
+        assignments: dict[tuple[int, int], int] = {}
+        k = min(n_cells, 50)
+        for item_idx in range(min(n_items, n_cells)):
+            # query k nearest cells; double k and retry if all are already occupied
+            while True:
+                _, cell_indices = tree.query(scaled_coords[item_idx], k=k)
+                # tree.query returns a scalar when k=1, so normalise to iterable
+                indices = [cell_indices] if k == 1 else cell_indices
+                chosen = next((i for i in indices if i not in used), None)
+                if chosen is not None:
+                    break
+                if k == n_cells:
+                    break  # no free cell (shouldn't happen for n_items ≤ n_cells)
+                k = min(k * 2, n_cells)
+            if chosen is None:
+                continue
+            used.add(chosen)
+            assignments[(int(grid_cells[chosen][0]), int(grid_cells[chosen][1]))] = (
+                item_idx
+            )
+        return assignments
 
 
 MIN_THUMB_SIZE = 20
