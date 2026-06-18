@@ -26,45 +26,65 @@ def reduce_features(features: np.ndarray) -> np.ndarray:
     return (coords - min_coords) / span
 
 
-def assign_grid(
+def assign_to_grid(
     coords: np.ndarray, grid_cols: int, grid_rows: int
 ) -> dict[tuple[int, int], int]:
-    """Assign N images to grid cells via lapjv (Jonker-Volgenant).
+    """Given an array of x,y coordinates as returned from :meth:`reduce_features` and
+    a grid size based on columns and rows, assign each item in the coordinates
+    array to a cell in the grid. Uses lapjv (Jonker-Volgenant) to determine the best fit.
 
-    Returns {(row, col): img_idx}. Cells with no image are omitted.
+    Returns a dictionary of the grid assignment for each input item, based on index
+    in the original coords array.
+        {(row, col): item_idx}. Cells with no image are omitted.
     """
 
-    N = len(coords)
+    # determine number of items to be positioned based on number of x,y coordinates
+    n_items = len(coords)
+    # determine number of cells in the grid
     n_cells = grid_cols * grid_rows
 
+    # generate an array of grid coordinates for the requested grid size
     grid_cells = np.array(
         [(r, c) for r in range(grid_rows) for c in range(grid_cols)],
         dtype=np.float32,
     )
+    # generate a grid of center-cell coordinates from 0.0 to 1.0, for placement
     cell_centers = (grid_cells + 0.5) / np.array(
         [[grid_rows, grid_cols]], dtype=np.float32
     )
-
-    if N < n_cells:
-        padding = np.full((n_cells - N, 2), 0.5, dtype=np.float32)
-        padded = np.vstack([coords, padding])
+    # lapjv requires a square cost matrix; if there are more cells than items,
+    # add padding items to fill out the grid
+    if n_items < n_cells:
+        padding = np.full((n_cells - n_items, 2), 0.5, dtype=np.float32)
+        square_coords = np.vstack([coords, padding])
     else:
-        padded = coords[:n_cells]
+        square_coords = coords[:n_cells]
+        # warn if grid size results in any images being omitted
+        if n_items > n_cells:
+            print("Warning: omitting {n_cells - n_items:,} images from the grid")
 
+    # determine aspect ratio for the requested grid
     aspect = grid_cols / grid_rows
+    # scale the cell center coordinates based on the aspect ratio of the requested grid
     scale = np.array([[aspect, 1.0]], dtype=np.float32)
+    # build pairwise difference between cell centers and image coordinates, then
+    # collapse to get scalar distance for each pair; results in cost matrix input for lapjv
     cost = np.linalg.norm(
-        (padded * scale)[:, np.newaxis] - (cell_centers * scale)[np.newaxis],
+        (square_coords * scale)[:, np.newaxis] - (cell_centers * scale)[np.newaxis],
         axis=2,
     ).astype(np.float64)
 
-    # lap.lapjv returns (opt_cost, x, y): x[img]=cell, y[cell]=img
+    # lap.lapjv returns a tuple of optional cost, reverse mapping, and column index.
+    # The column index is the assigned mapping: array of item indices in their assigned to cell
     _, _, col_ind = lapjv(cost)
 
+    # use lapvj column index to map back to column/row placement in the grid
     return {
-        (int(grid_cells[cell_idx][0]), int(grid_cells[cell_idx][1])): img_idx
-        for cell_idx, img_idx in enumerate(col_ind)
-        if img_idx < N
+        # take lapjv assigned slot for each image and map to grid position
+        # decompose the flat array of grid cells back into row,col format
+        (int(grid_cells[cell_idx][0]), int(grid_cells[cell_idx][1])): item_idx
+        for cell_idx, item_idx in enumerate(col_ind)
+        if item_idx < n_items  # omit any padding items needed to make square
     }
 
 
@@ -96,8 +116,7 @@ def run_mosaic(
 
     grid_cols = width // thumb_size
     grid_rows = height // thumb_size
-    print(f"Assigning {len(paths)} images to {grid_cols}×{grid_rows} grid…")
-    assignments = assign_grid(coords, grid_cols, grid_rows)
+    assignments = assign_to_grid(coords, grid_cols, grid_rows)
 
     canvas = Image.new("RGB", (width, height), color=(255, 255, 255))
     for (row, col), img_idx in assignments.items():
