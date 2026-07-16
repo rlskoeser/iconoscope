@@ -43,7 +43,7 @@ To generate an embeddings mosaic image, pass the embeddings parquet file created
 iconoscope mosaic my_collection.parquet
 ```
 
-By default, this will create a mosaic at `my_collection.jpg`. Output size and filename can be customized with command-line parameters.
+By default, this will create a mosaic at `my_collection.jpg`. Output size and filename can be customized with command-line parameters. Thumbnail size is automatically determined to best fit images for the output mosaic size.
 
 ### info
 
