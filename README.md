@@ -1,0 +1,60 @@
+# iconoscope
+
+`iconoscope` is a python package for exploring image collections using visual similarity based on image embeddings extracted from models like CLIP and DINOv2/3. Embeddings can be used to generate a static mosaic where visually similar images appear near each other.
+
+The name **iconoscope** comes from the Greek words for _image_ (εἰκών) and _to see_ (σκοπεῖν). The iconoscope
+"was the first practical video camera tube to be used in early television cameras" ([Wikipedia](https://en.wikipedia.org/wiki/Iconoscope)).
+
+This package was inspired by [Andrej Karpathy's CNN embedding visualizer](https://cs.stanford.edu/people/karpathy/cnnembed/). Version 0.1 started as a python port of Karpathy's cnnembed Matlab code created with Claude Code.
+
+## Install
+
+Install with pip, [uv](https://docs.astral.sh/uv/), or similar.
+
+```bash
+pip install iconoscope
+```
+
+## Usage
+
+iconoscope functionality is currently command-line only.
+
+### embed
+
+To generate embeddings for local images, specify the path to a directory containing images and the filename to save the generated embeddings.
+
+```console
+iconoscope embed path/to/images/ my_collection.parquet
+```
+
+iconoscope will search for image files anywhere within the specified image directory, with supported image extensions (currently .jpg, .jpeg, .png). Image features will be extracted with a pre-trained image model (currently DINOv2) and saved to the specified output (currently parquet only).
+
+### mosaic
+
+To generate an embeddings mosaic image, pass the embeddings parquet file created in the first step. The first step is to run UMAP on the embeddings to generate coordinates for positioning images in the mosaic. These are saved in the parquet file so they do not need to be re-computed on subsequent runs. To use all the defaults, specify just the saved embeddings file:
+
+```console
+iconoscope mosaic my_collection.parquet
+```
+
+By default, this will create a mosaic at `my_collection.jpg`. Output size and filename can be customized with command-line parameters.
+
+### info
+
+To check the content in an iconoscope parquet file, use `iconoscope info`. This will report the number of images and whether or not the file includes UMAP coordinates. Example:
+
+```console
+iconoscope mosaic my_collection.parquet
+Details for my_collection.parquet :
+  4,302 images with features extracted
+  UMAP coordinates
+```
+
+## Acknowledgments
+
+Substantial portions of this code were developed with support from
+agentic AI coding tools, primarily ClaudeCode & OpenCode and associated models; version 0.1 was a vibe-coded prototype.
+
+## License
+
+Apache 2.0
