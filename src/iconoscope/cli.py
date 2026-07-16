@@ -81,7 +81,6 @@ def main():
     )
     parser_mosaic.add_argument("--width", type=int, default=2000)
     parser_mosaic.add_argument("--height", type=int, default=2000)
-    parser_mosaic.add_argument("--thumb-size", type=int, default=50, dest="thumb_size")
     parser_mosaic.add_argument(
         "--jpeg-quality", type=int, default=90, dest="jpeg_quality"
     )
