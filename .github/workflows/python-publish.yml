@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/piffle
+      url: https://pypi.org/project/iconoscope
     permissions:
       id-token: write # required for trusted publishing
       contents: read
