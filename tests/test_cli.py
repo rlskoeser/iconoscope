@@ -27,7 +27,7 @@ def test_main_embed_raises_on_missing_dir(tmp_path: Path):
 
 def test_main_embed_calls_extract(tmp_path: Path):
     output_path = tmp_path / "out.parquet"
-    args = argparse.Namespace(image_dir=tmp_path, output_path=output_path)
+    args = argparse.Namespace(image_dir=tmp_path, output_path=output_path, max=None)
     with patch.object(cli, "extract_img_features") as mock_extract:
         cli.main_embed(args)
-        mock_extract.assert_called_once_with(tmp_path, output_path)
+        mock_extract.assert_called_once_with(tmp_path, output_path, args.max)

@@ -10,12 +10,23 @@ from transformers import AutoImageProcessor, AutoModel
 
 
 class ImageDataset(IterableDataset):
+    #: supported image extensions
     img_extensions = {".jpg", ".png", ".jpeg"}
 
-    def __init__(self, base_dir: Path, extensions: set | None = None):
+    #: optional limit for number of images to find
+    max_images: int | None = None
+
+    def __init__(
+        self,
+        base_dir: Path,
+        extensions: set | None = None,
+        max_images: int | None = None,
+    ):
         self.base_dir = base_dir
         if extensions:
             self.img_extensions = extensions
+
+        self.max_images = max_images
 
     def __iter__(self):
         # by default, find all files with an extension and then filter by suffix
@@ -25,13 +36,17 @@ class ImageDataset(IterableDataset):
         if single_ext:
             rglob_pattern = f"*{list(self.img_extensions)[0]}"
 
-        for file_path in self.base_dir.rglob(rglob_pattern):
+        for i, file_path in enumerate(self.base_dir.rglob(rglob_pattern), start=1):
             # return if found by single extension or if suffix is in the list
             if single_ext or file_path.suffix.lower() in self.img_extensions:
                 # TODO: still needs error handling
                 img = Image.open(file_path).convert("RGB")
                 # yield a tuple of image object and file path as string
                 yield img, str(file_path)
+
+            # stop after the requested maximum if there is one
+            if self.max_images is not None and i >= self.max_images:
+                break
 
     @staticmethod
     def collate(batch):
@@ -42,7 +57,7 @@ class ImageDataset(IterableDataset):
         return list(images), list(paths)
 
 
-def extract_img_features(img_dir: Path, outfile: Path):
+def extract_img_features(img_dir: Path, outfile: Path, max_images: int | None = None):
     # autodetect which device to use
     device = Accelerator().device
     print(f"Using device={device}")
@@ -50,7 +65,7 @@ def extract_img_features(img_dir: Path, outfile: Path):
     processor = AutoImageProcessor.from_pretrained("facebook/dinov2-base")
     model = AutoModel.from_pretrained("facebook/dinov2-base").to(device)
 
-    img_dataset = ImageDataset(img_dir)
+    img_dataset = ImageDataset(img_dir, max_images=max_images)
     batch_size = 256
     dataloader = DataLoader(
         img_dataset,

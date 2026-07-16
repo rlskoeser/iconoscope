@@ -10,7 +10,7 @@ from iconoscope.mosaic import generate_mosaic
 def main_embed(args: argparse.Namespace):
     if not args.image_dir.is_dir():
         raise SystemExit(f"{args.image_dir} is not a directory")
-    extract_img_features(args.image_dir, args.output_path)
+    extract_img_features(args.image_dir, args.output_path, args.max)
 
 
 def main_mosaic(args: argparse.Namespace):
@@ -55,6 +55,9 @@ def main():
         "output_path",
         type=Path,
         help="File path for saved embeddings (.parquet)",
+    )
+    parser_embed.add_argument(
+        "-m", "--max", type=int, help="Limit to specified number of images"
     )
     parser_embed.set_defaults(func=main_embed)
 

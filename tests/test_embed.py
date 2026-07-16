@@ -62,3 +62,9 @@ def test_iter_recurses_subdirs(tmp_path: Path):
     Image.new("RGB", (8, 8)).save(sub / "nested.jpg")
     dataset = ImageDataset(tmp_path)
     assert len(list(dataset)) == 2
+
+
+def test_iter_max_images(tmp_image_dir: Path):
+    dataset = ImageDataset(tmp_image_dir, max_images=2)
+    items = list(dataset)
+    assert len(items) == 2
