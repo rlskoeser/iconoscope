@@ -17,8 +17,8 @@ def main_mosaic(args: argparse.Namespace):
     generate_mosaic(
         embeddings_path=args.embeddings,
         output=args.output,
-        width=args.width,
-        height=args.height,
+        width=args.size.width,
+        height=args.size.height,
         jpeg_quality=args.jpeg_quality,
         sample_size=args.limit,
     )
@@ -40,6 +40,14 @@ def embeddings_info(args: argparse.Namespace):
         info_details.append("  UMAP coordinates")
 
     print("\n".join(info_details))
+
+
+def size_tuple(size_str: str) -> argparse.Namespace:
+    parts = [int(side) for side in size_str.split("x")]
+    width = parts.pop(0)
+    height = parts.pop() if parts else width
+    # TODO: error if still parts left
+    return argparse.Namespace(width=width, height=height)
 
 
 def main():
@@ -84,8 +92,7 @@ def main():
         help="Output image path (default: embeddings stem + .jpg)",
     )
 
-    parser_mosaic.add_argument("--width", type=int, default=2000)
-    parser_mosaic.add_argument("--height", type=int, default=2000)
+    parser_mosaic.add_argument("-s", "--size", type=size_tuple, default="2000")
     parser_mosaic.add_argument(
         "--jpeg-quality", type=int, default=90, dest="jpeg_quality"
     )
