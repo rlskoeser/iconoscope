@@ -42,11 +42,18 @@ def embeddings_info(args: argparse.Namespace):
     print("\n".join(info_details))
 
 
-def size_tuple(size_str: str) -> argparse.Namespace:
-    parts = [int(side) for side in size_str.split("x")]
+def size_tuple(size_str: str | int) -> argparse.Namespace:
+    try:
+        parts = [int(side) for side in str(size_str).split("x")]
+    except ValueError as err:
+        raise ValueError(f"Could not parse `{size_str}` as a size: {err}") from err
+    # first portion is the width
     width = parts.pop(0)
+    # if a second value is present, use as height; otherwise width
     height = parts.pop() if parts else width
-    # TODO: error if still parts left
+    # if there are parts leftover, raise value error
+    if parts:
+        raise ValueError(f"Could not parse `{size_str}` as a size")
     return argparse.Namespace(width=width, height=height)
 
 
@@ -92,7 +99,13 @@ def main():
         help="Output image path (default: embeddings stem + .jpg)",
     )
 
-    parser_mosaic.add_argument("-s", "--size", type=size_tuple, default="2000")
+    parser_mosaic.add_argument(
+        "-s",
+        "--size",
+        type=size_tuple,
+        default="2000",
+        help="Output image size; specify a single dimension for a square or both width and height as 1000x250. (default: %(default)s)",
+    )
     parser_mosaic.add_argument(
         "--jpeg-quality", type=int, default=90, dest="jpeg_quality"
     )

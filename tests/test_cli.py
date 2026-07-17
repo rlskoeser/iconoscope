@@ -31,3 +31,24 @@ def test_main_embed_calls_extract(tmp_path: Path):
     with patch.object(cli, "extract_img_features") as mock_extract:
         cli.main_embed(args)
         mock_extract.assert_called_once_with(tmp_path, output_path, args.max)
+
+
+def test_size_tuple():
+    # single dimension -> square
+    assert cli.size_tuple("200") == argparse.Namespace(width=200, height=200)
+    assert cli.size_tuple(200) == argparse.Namespace(width=200, height=200)
+    # width x height
+    assert cli.size_tuple("150x250") == argparse.Namespace(width=150, height=250)
+
+    # errors
+    # too many dimensions
+    with pytest.raises(ValueError, match="Could not parse"):
+        cli.size_tuple("100x200x300")
+    # too few
+    with pytest.raises(ValueError, match="invalid literal"):
+        cli.size_tuple("")
+    # non-numeric
+    with pytest.raises(ValueError, match="invalid literal"):
+        cli.size_tuple("a")
+    with pytest.raises(ValueError, match="invalid literal"):
+        cli.size_tuple("10xb")
