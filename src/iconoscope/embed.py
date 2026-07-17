@@ -40,7 +40,12 @@ class ImageDataset(IterableDataset):
             # return if found by single extension or if suffix is in the list
             if single_ext or file_path.suffix.lower() in self.img_extensions:
                 # TODO: still needs error handling
-                img = Image.open(file_path).convert("RGB")
+                try:
+                    img = Image.open(file_path).convert("RGB")
+                except OSError as err:
+                    # TODO: add logging
+                    print(f"Error loading {file_path}: {err}")
+                    continue
                 # yield a tuple of image object and file path as string
                 yield img, str(file_path)
 
