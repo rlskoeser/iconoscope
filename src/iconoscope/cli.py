@@ -20,6 +20,7 @@ def main_mosaic(args: argparse.Namespace):
         width=args.width,
         height=args.height,
         jpeg_quality=args.jpeg_quality,
+        sample_size=args.limit,
     )
 
 
@@ -82,10 +83,17 @@ def main():
         default=None,
         help="Output image path (default: embeddings stem + .jpg)",
     )
+
     parser_mosaic.add_argument("--width", type=int, default=2000)
     parser_mosaic.add_argument("--height", type=int, default=2000)
     parser_mosaic.add_argument(
         "--jpeg-quality", type=int, default=90, dest="jpeg_quality"
+    )
+    parser_mosaic.add_argument(
+        "-l",
+        "--limit",
+        type=int,
+        help="Limit to sample of images of the specified size",
     )
     parser_mosaic.set_defaults(func=main_mosaic)
 

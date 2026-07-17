@@ -131,6 +131,7 @@ def generate_mosaic(
     width: int = 2000,
     height: int = 2000,
     jpeg_quality: int = 90,
+    sample_size: int | None = None,
 ) -> None:
     """Generate a mosaic of images based on previous calculated image embeddings.
     Load image feature vectors from the embeddings parquet file, reduce with PCA+UMAP,
@@ -143,6 +144,7 @@ def generate_mosaic(
 
     # load image embeddings from saved parquet file
     df = pl.read_parquet(embeddings_path)
+
     # if coordinates have not already been calculated, reduce and store results
     if "umap" not in df.columns:
         print(f"Running UMAP on {df.height} image embeddings…")
@@ -151,6 +153,11 @@ def generate_mosaic(
         df.write_parquet(embeddings_path)  # save the result
     else:
         print(f"Using existing UMAP coordinates in {embeddings_path}")
+
+    # if a sample is requested, select a random sample of the specified size
+    # (subset after UMAP coords are generated, since they should be done for all images)
+    if sample_size is not None:
+        df = df.sample(sample_size)
 
     paths = df["image_path"].to_list()
 
