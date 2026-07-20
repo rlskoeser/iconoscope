@@ -25,9 +25,9 @@ def _(mo):
 def _(df, mo):
     slider = mo.ui.slider(
         start=10,
-        stop=df.height,
+        stop=df.height if not df.is_empty() else 30,
         label="Number of images",
-        value=min(30, df.height),
+        value=min(30, df.height if not df.is_empty() else 30),
         show_value=True,
         include_input=True,
     )
