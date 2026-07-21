@@ -3,13 +3,14 @@ import warnings
 from pathlib import Path
 
 import numpy as np
-import polars as pl
 import umap
 from lap import lapjv
 from PIL import Image
 from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
+
+from iconoscope.storage import load_features, save_features
 
 
 def reduce_features(features: np.ndarray) -> np.ndarray:
@@ -142,15 +143,16 @@ def generate_mosaic(
     if output is None:
         output = embeddings_path.with_suffix(".jpg")
 
-    # load image embeddings from saved parquet file
-    df = pl.read_parquet(embeddings_path)
+    # load image embeddings from hdf5 file
+    df = load_features(embeddings_path)
 
     # if coordinates have not already been calculated, reduce and store results
     if "umap" not in df.columns:
         print(f"Running UMAP on {df.height} image embeddings…")
         df = df.with_columns(umap=reduce_features(df["features"].to_numpy()))
+        # save umap to hdf5 file
+        save_features(embeddings_path, df)
         print(f"Updated {embeddings_path} with UMAP coordinates")
-        df.write_parquet(embeddings_path)  # save the result
     else:
         print(f"Using existing UMAP coordinates in {embeddings_path}")
 
