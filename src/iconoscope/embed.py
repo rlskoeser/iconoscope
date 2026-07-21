@@ -8,6 +8,8 @@ from torch.utils.data import DataLoader, IterableDataset
 from tqdm import tqdm
 from transformers import AutoImageProcessor, AutoModel
 
+from iconoscope.storage import save_features
+
 
 class ImageDataset(IterableDataset):
     #: supported image extensions
@@ -106,6 +108,8 @@ def extract_img_features(img_dir: Path, outfile: Path, max_images: int | None = 
             # update progress bar (how many to increase, not the total count)
             progbar.update(len(images))
 
-    img_feature_df.write_parquet(outfile)
+    save_features(outfile, img_feature_df, "dinov2")
     progbar.close()
-    print(f"Successfully extracted features from {img_feature_df.height:,} images.")
+    print(
+        f"Successfully extracted features from {img_feature_df.height:,} images and saved to {outfile}"
+    )

@@ -1,10 +1,10 @@
 import argparse
 from pathlib import Path
 
-import polars as pl
 
 from iconoscope.embed import extract_img_features
 from iconoscope.mosaic import generate_mosaic
+from iconoscope.storage import info
 
 
 def main_embed(args: argparse.Namespace):
@@ -27,17 +27,22 @@ def main_mosaic(args: argparse.Namespace):
 def embeddings_info(args: argparse.Namespace):
     if not args.embeddings.is_file():
         raise SystemExit(f"{args.embeddings} is not a file")
-    df = pl.read_parquet(args.embeddings)
+    details = info(args.embeddings)
 
     info_details = [f"Details for {args.embeddings} :"]
 
-    if "image_path" in df.columns and "features" in df.columns:
-        info_details.append(f"  {df.height:,} images with features extracted")
+    if "image_paths" in details:
+        info_details.append(f"  {details['image_paths']:,} image paths")
     else:
         info_details.append(" image_path and features columns not found")
 
-    if "umap" in df.columns:
-        info_details.append("  UMAP coordinates")
+    for model, model_details in details["features"].items():
+        # convert shape tuple into a readable dimension string
+        embed_dimensions = "x".join([str(dim) for dim in model_details["embeddings"]])
+        info_details.append(f"  {model} extracted features ({embed_dimensions})")
+
+    # if "umap" in df.columns:
+    #     info_details.append("  UMAP coordinates")
 
     print("\n".join(info_details))
 
@@ -70,7 +75,7 @@ def main():
     parser_embed.add_argument(
         "output_path",
         type=Path,
-        help="File path for saved embeddings (.parquet)",
+        help="File path for saved embeddings (.hdf5)",
     )
     parser_embed.add_argument(
         "-m", "--max", type=int, help="Limit to specified number of images"
@@ -81,7 +86,7 @@ def main():
     info_parser.add_argument(
         "embeddings",
         type=Path,
-        help="Embeddings file produced by iconoscope embed (.parquet)",
+        help="Embeddings file produced by iconoscope embed (.hdf5)",
     )
     info_parser.set_defaults(func=embeddings_info)
 
@@ -89,7 +94,7 @@ def main():
     parser_mosaic.add_argument(
         "embeddings",
         type=Path,
-        help="Embeddings file produced by the embed command (.parquet)",
+        help="Embeddings file produced by the embed command (.hdf5)",
     )
     parser_mosaic.add_argument(
         "--output",
