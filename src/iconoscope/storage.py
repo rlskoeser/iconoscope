@@ -65,25 +65,8 @@ def load_features(datafile: Path, model_name: str | None = None) -> pl.DataFrame
         # [:] = retrieve all scalar data
         return pl.DataFrame(
             data={
-                "image_path": img_dataset[:],
+                # load image paths as string instead of binary string
+                "image_path": img_dataset.astype("T")[:],
                 "features": features[:],
             }
-        ).with_columns(
-            # image path is loaded as binary string; convert to string
-            image_path=pl.col.image_path.cast(pl.String)
         )
-
-
-# df = pl.read_parquet(args.embeddings)
-
-# info_details = [f"Details for {args.embeddings} :"]
-
-# if "image_path" in df.columns and "features" in df.columns:
-#     info_details.append(f"  {df.height:,} images with features extracted")
-# else:
-#     info_details.append(" image_path and features columns not found")
-
-# if "umap" in df.columns:
-#     info_details.append("  UMAP coordinates")
-
-# print("\n".join(info_details))
