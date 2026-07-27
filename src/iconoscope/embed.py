@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Generator
 
 import polars as pl
 import torch
@@ -30,7 +31,7 @@ class ImageDataset(IterableDataset):
 
         self.max_images = max_images
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[tuple[Image.Image, str]]:
         # by default, find all files with an extension and then filter by suffix
         rglob_pattern = "*.*"
         # if only a single extension, look for just that file type with rglob

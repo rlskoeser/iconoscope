@@ -13,6 +13,10 @@ def main_embed(args: argparse.Namespace):
     extract_img_features(args.image_dir, args.output_path, args.max)
 
 
+# new version will look something like:
+# image_c = ImageCollection(image_dir, output_path).extract_features()
+
+
 def main_mosaic(args: argparse.Namespace):
     generate_mosaic(
         embeddings_path=args.embeddings,
