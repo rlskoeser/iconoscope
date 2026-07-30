@@ -32,6 +32,11 @@ def main_mosaic(args: argparse.Namespace):
     )
 
 
+def dimensions(shape: tuple[int, int]) -> str:
+    # convert ndarray shape tuple into readable dimensions
+    return "x".join([str(dim) for dim in shape])
+
+
 def dataset_info(args: argparse.Namespace):
     img_dataset = ImageDataset(storage_path=args.dataset)
     # if not args.embeddings.is_file():
@@ -52,11 +57,11 @@ def dataset_info(args: argparse.Namespace):
 
     for model, model_details in details["models"].items():
         # convert shape tuple into a readable dimension string
-        embed_dimensions = "x".join([str(dim) for dim in model_details["embeddings"]])
-        info_details.append(f"  {model} extracted features ({embed_dimensions})")
-
-    # if "umap" in df.columns:
-    #     info_details.append("  UMAP coordinates")
+        embed_dims = dimensions(model_details["embeddings"])
+        info_details.append(f"  {model} extracted features ({embed_dims})")
+        if "umap" in model_details:
+            umap_dims = dimensions(model_details["umap"])
+            info_details.append(f"     umap coordinates ({umap_dims})")
 
     print("\n".join(info_details))
 
