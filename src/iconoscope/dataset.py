@@ -185,3 +185,5 @@ class ImageDataset(IterableDataset):
                     "image_path": img_dataset[:].astype("T")[:],
                 }
             )
+
+    # loading model features: same syntax features[:],
