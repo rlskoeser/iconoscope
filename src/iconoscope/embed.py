@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import polars as pl
 import torch
 from accelerate import Accelerator
@@ -8,11 +6,15 @@ from tqdm import tqdm
 from transformers import AutoImageProcessor, AutoModel
 from torch.utils.data import DataLoader
 
-from iconoscope.storage import save_features
 from iconoscope.dataset import ImageDataset
 
 
-def extract_img_features(img_dir: Path, outfile: Path, max_images: int | None = None):
+def extract_img_features(img_dataset: ImageDataset) -> pl.DataFrame:
+    """ "
+    Takes an image dataset and extracts features. Returns  a DataFrame with image_path, features.
+    """
+    # params to add later: model, boolean for progress bar
+
     # autodetect which device to use
     device = Accelerator().device
     print(f"Using device={device}")
@@ -20,7 +22,6 @@ def extract_img_features(img_dir: Path, outfile: Path, max_images: int | None = 
     processor = AutoImageProcessor.from_pretrained("facebook/dinov2-base")
     model = AutoModel.from_pretrained("facebook/dinov2-base").to(device)
 
-    img_dataset = ImageDataset(img_dir, max_images=max_images)
     batch_size = 256
     dataloader = DataLoader(
         img_dataset,
@@ -56,8 +57,6 @@ def extract_img_features(img_dir: Path, outfile: Path, max_images: int | None = 
             # update progress bar (how many to increase, not the total count)
             progbar.update(len(images))
 
-    save_features(outfile, img_feature_df, "dinov2")
     progbar.close()
-    print(
-        f"Successfully extracted features from {img_feature_df.height:,} images and saved to {outfile}"
-    )
+    print(f"Successfully extracted features from {img_feature_df.height:,} images")
+    return img_feature_df
