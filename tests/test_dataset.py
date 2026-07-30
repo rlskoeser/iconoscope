@@ -68,3 +68,17 @@ def test_iter_max_images(tmp_image_dir: Path):
     dataset = ImageDataset(tmp_image_dir, max_images=2)
     items = list(dataset)
     assert len(items) == 2
+
+
+def test_iter_default_extensions_include_jpeg_png(tmp_path: Path):
+    Image.new("RGB", (8, 8)).save(tmp_path / "a.jpg")
+    Image.new("RGB", (8, 8)).save(tmp_path / "b.png")
+    Image.new("RGB", (8, 8)).save(tmp_path / "c.jpeg")
+    dataset = ImageDataset(tmp_path)
+    assert len(list(dataset)) == 3
+
+
+def test_iter_extension_case_insensitive(tmp_path: Path):
+    Image.new("RGB", (8, 8)).save(tmp_path / "upper.JPG", format="JPEG")
+    dataset = ImageDataset(tmp_path)
+    assert len(list(dataset)) == 1
