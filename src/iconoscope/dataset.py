@@ -168,11 +168,19 @@ class ImageDataset(IterableDataset):
                 "image_dir": orig_img_dir,
                 "models": {},
             }
-            model_grp = img_grp["models"]
-            for model in model_grp.keys():
-                features = model_grp[f"{model}/features"]
-                # check that they match?
-                info["models"][model] = {"embeddings": features.shape}
+            all_models_grp = img_grp["models"]
+            for model in all_models_grp.keys():
+                model_grp = all_models_grp[model]
+                model_data = {}
+                if "features" in model_grp:
+                    features = model_grp["features"]
+                    model_data["embeddings"] = features.shape
+                if "umap" in model_grp:
+                    umap = model_grp["umap"]
+                    model_data["umap"] = umap.shape
+
+                # any validation ? check rows?
+                info["models"][model] = model_data
             return info
 
     def load_image_paths(self) -> pl.DataFrame:
