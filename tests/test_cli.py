@@ -7,30 +7,33 @@ import pytest
 from iconoscope import cli
 
 
-def test_embed_parses_positional_args(tmp_path: Path):
-    out = tmp_path / "out.parquet"
-    with (
-        patch.object(cli, "extract_img_features"),
-        patch("sys.argv", ["iconoscope", "embed", str(tmp_path), str(out)]),
-    ):
+@patch("iconoscope.cli.ImageDataset")
+@patch("iconoscope.cli.extract_img_features")
+def test_embed_args(mock_extract_features, mock_img_dataset, tmp_path: Path):
+    # test cli args are passed correctly for embed function
+    out = tmp_path / "out.h5"
+    with patch("sys.argv", ["iconoscope", "embed", str(tmp_path), str(out)]):
         cli.main()
 
+    mock_img_dataset.assert_called_with(
+        storage_path=out, image_dir=tmp_path, max_images=None
+    )
+    mock_extract_features.assert_called_with(mock_img_dataset.return_value)
+    mock_img_dataset.return_value.save_features.assert_called_with(
+        mock_extract_features.return_value, "dinov2"
+    )
 
-def test_main_embed_raises_on_missing_dir(tmp_path: Path):
+
+def test_main_embed_missing_dir(tmp_path: Path):
     missing_dir = tmp_path / "no_such_dir"
     args = argparse.Namespace(
-        image_dir=missing_dir, output_path=tmp_path / "out.parquet"
+        image_dir=missing_dir, output_path=tmp_path / "out.h5", max=None
     )
     with pytest.raises(SystemExit):
         cli.main_embed(args)
 
 
-def test_main_embed_calls_extract(tmp_path: Path):
-    output_path = tmp_path / "out.parquet"
-    args = argparse.Namespace(image_dir=tmp_path, output_path=output_path, max=None)
-    with patch.object(cli, "extract_img_features") as mock_extract:
-        cli.main_embed(args)
-        mock_extract.assert_called_once_with(tmp_path, output_path, args.max)
+## custom size type for argparse to support specifying size as wxh
 
 
 def test_size_tuple():

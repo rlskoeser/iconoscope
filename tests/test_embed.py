@@ -51,31 +51,13 @@ def test_extract_returns_features(tmp_image_dir: Path):
 
     patches = _patch_ml(processor, model)
     with patches[0], patches[1], patches[2]:
-        df = embed.extract_img_features(ImageDataset(tmp_image_dir))
+        df = embed.extract_img_features(
+            ImageDataset(image_dir=tmp_image_dir, storage_path=tmp_image_dir / "a.h5")
+        )
 
     assert df.height == 3
     assert df.columns == ["image_path", "features"]
     assert df["features"].dtype.size == 768
-
-
-def test_extract_respects_max_images(tmp_image_dir: Path):
-    processor, model = _fake_processor_and_model()
-
-    patches = _patch_ml(processor, model)
-    with patches[0], patches[1], patches[2]:
-        df = embed.extract_img_features(ImageDataset(tmp_image_dir, max_images=2))
-
-    assert df.height == 2
-
-
-def test_extract_empty_dir(tmp_path: Path):
-    processor, model = _fake_processor_and_model()
-
-    patches = _patch_ml(processor, model)
-    with patches[0], patches[1], patches[2]:
-        df = embed.extract_img_features(ImageDataset(tmp_path))
-
-    assert df.height == 0
 
 
 def test_extract_uses_accelerator_device(tmp_image_dir: Path):
@@ -90,7 +72,9 @@ def test_extract_uses_accelerator_device(tmp_image_dir: Path):
         ),
         patch.object(embed.AutoModel, "from_pretrained", return_value=model),
     ):
-        embed.extract_img_features(ImageDataset(tmp_image_dir))
+        embed.extract_img_features(
+            ImageDataset(image_dir=tmp_image_dir, storage_path=tmp_image_dir / "a.h5")
+        )
 
     # model was moved onto the accelerator device
     assert model.device == "meta-device"
@@ -99,9 +83,13 @@ def test_extract_uses_accelerator_device(tmp_image_dir: Path):
 def test_extract_image_paths_match(tmp_image_dir: Path):
     processor, model = _fake_processor_and_model()
 
+    img_dataset = ImageDataset(
+        image_dir=tmp_image_dir, storage_path=tmp_image_dir / "a.h5"
+    )
+
     patches = _patch_ml(processor, model)
     with patches[0], patches[1], patches[2]:
-        df = embed.extract_img_features(ImageDataset(tmp_image_dir))
+        df = embed.extract_img_features(img_dataset)
 
-    expected = {path for _img, path in ImageDataset(tmp_image_dir)}
+    expected = {path for _img, path in img_dataset}
     assert set(df["image_path"].to_list()) == expected

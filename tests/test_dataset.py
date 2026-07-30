@@ -3,23 +3,23 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from iconoscope.dataset import ImageDataset
+from iconoscope.dataset import ImageDataset, find_images
 
 
 def test_init_validation(tmp_path):
     image_dir = tmp_path / "images"
     # non-existent
-    with pytest.raises(SystemExit):
-        ImageDataset(image_dir=image_dir)
+    with pytest.raises(ValueError):
+        ImageDataset(image_dir=image_dir, storage_path=tmp_path / "a.h5")
     # file instead of dir
     img_file = tmp_path / "img.png"
     img_file.touch()
-    with pytest.raises(SystemExit):
-        ImageDataset(image_dir=img_file)
+    with pytest.raises(ValueError):
+        ImageDataset(image_dir=img_file, storage_path=tmp_path / "a.h5")
 
     # directory - no error, returns new object
     image_dir.mkdir()
-    assert ImageDataset(image_dir=image_dir)
+    assert ImageDataset(image_dir=image_dir, storage_path=tmp_path / "a.h5")
 
 
 def test_collate_returns_lists():
@@ -40,62 +40,56 @@ def test_collate_single_item():
     assert paths == ["/x.png"]
 
 
-def test_iter_finds_images(tmp_image_dir: Path):
-    dataset = ImageDataset(tmp_image_dir)
-    items = list(dataset)
+def test_find_images(tmp_image_dir: Path):
+    items = list(find_images(tmp_image_dir))
     assert len(items) == 3
-    for img, path in items:
-        assert isinstance(img, Image.Image)
-        assert img.mode == "RGB"
-        assert Path(path).suffix == ".jpg"
+    for path in items:
+        assert isinstance(path, Path)
+        assert path.suffix == ".jpg"
 
 
-def test_iter_empty_dir(tmp_path: Path):
-    dataset = ImageDataset(tmp_path)
-    assert list(dataset) == []
+def test_find_images_empty_dir(tmp_path: Path):
+    assert list(find_images(tmp_path)) == []
 
 
-def test_iter_skips_non_image(tmp_path: Path):
+def test_find_images_skips_non_image(tmp_path: Path):
     (tmp_path / "notes.txt").write_text("hello")
     Image.new("RGB", (8, 8)).save(tmp_path / "photo.jpg")
-    dataset = ImageDataset(tmp_path)
-    items = list(dataset)
+    items = list(find_images(tmp_path))
     assert len(items) == 1
 
 
-def test_iter_custom_extensions(tmp_path: Path):
+def test_find_images_custom_extensions(tmp_path: Path):
     Image.new("RGB", (8, 8)).save(tmp_path / "a.jpg")
     Image.new("RGB", (8, 8)).save(tmp_path / "b.png")
-    dataset = ImageDataset(tmp_path, extensions={".png"})
-    items = list(dataset)
+    items = list(find_images(tmp_path, extensions={".png"}))
     assert len(items) == 1
-    assert items[0][1].endswith(".png")
+    assert items[0].suffix == ".png"
 
 
-def test_iter_recurses_subdirs(tmp_path: Path):
+def test_find_images_recurses_subdirs(tmp_path: Path):
     sub = tmp_path / "sub"
     sub.mkdir()
     Image.new("RGB", (8, 8)).save(tmp_path / "top.jpg")
     Image.new("RGB", (8, 8)).save(sub / "nested.jpg")
-    dataset = ImageDataset(tmp_path)
-    assert len(list(dataset)) == 2
+    items = find_images(tmp_path)
+    assert len(list(items)) == 2
 
 
-def test_iter_max_images(tmp_image_dir: Path):
-    dataset = ImageDataset(tmp_image_dir, max_images=2)
-    items = list(dataset)
+def test_find_images_max(tmp_image_dir: Path):
+    items = list(find_images(tmp_image_dir, max=2))
     assert len(items) == 2
 
 
-def test_iter_default_extensions_include_jpeg_png(tmp_path: Path):
+def test_find_images_default_extensions(tmp_path: Path):
     Image.new("RGB", (8, 8)).save(tmp_path / "a.jpg")
     Image.new("RGB", (8, 8)).save(tmp_path / "b.png")
     Image.new("RGB", (8, 8)).save(tmp_path / "c.jpeg")
-    dataset = ImageDataset(tmp_path)
+    dataset = find_images(tmp_path)
     assert len(list(dataset)) == 3
 
 
-def test_iter_extension_case_insensitive(tmp_path: Path):
+def test_find_images_extension_case_insensitive(tmp_path: Path):
     Image.new("RGB", (8, 8)).save(tmp_path / "upper.JPG", format="JPEG")
-    dataset = ImageDataset(tmp_path)
-    assert len(list(dataset)) == 1
+    items = find_images(tmp_path)
+    assert len(list(items)) == 1
