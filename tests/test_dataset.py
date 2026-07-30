@@ -1,8 +1,25 @@
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from iconoscope.dataset import ImageDataset
+
+
+def test_init_validation(tmp_path):
+    image_dir = tmp_path / "images"
+    # non-existent
+    with pytest.raises(SystemExit):
+        ImageDataset(image_dir=image_dir)
+    # file instead of dir
+    img_file = tmp_path / "img.png"
+    img_file.touch()
+    with pytest.raises(SystemExit):
+        ImageDataset(image_dir=img_file)
+
+    # directory - no error, returns new object
+    image_dir.mkdir()
+    assert ImageDataset(image_dir=image_dir)
 
 
 def test_collate_returns_lists():
