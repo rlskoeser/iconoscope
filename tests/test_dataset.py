@@ -2,7 +2,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from iconoscope.embed import ImageDataset
+from iconoscope.dataset import ImageDataset
 
 
 def test_collate_returns_lists():
