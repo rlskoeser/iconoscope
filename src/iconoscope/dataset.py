@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from pathlib import Path
 
 from PIL import Image
@@ -23,7 +24,7 @@ class ImageDataset(IterableDataset):
 
         self.max_images = max_images
 
-    def __iter__(self):  #  -> Generator[tuple[Image.Image, str]]:
+    def __iter__(self) -> Iterator[tuple[Image.Image, str]]:
         # by default, find all files with an extension and then filter by suffix
         rglob_pattern = "*.*"
         # if only a single extension, look for just that file type with rglob
