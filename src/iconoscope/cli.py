@@ -1,20 +1,23 @@
 import argparse
 from pathlib import Path
 
-
+from iconoscope.dataset import ImageDataset
 from iconoscope.embed import extract_img_features
 from iconoscope.mosaic import generate_mosaic
-from iconoscope.storage import info
 
 
 def main_embed(args: argparse.Namespace):
-    if not args.image_dir.is_dir():
-        raise SystemExit(f"{args.image_dir} is not a directory")
-    extract_img_features(args.image_dir, args.output_path, args.max)
-
-
-# new version will look something like:
-# image_c = ImageCollection(image_dir, output_path).extract_features()
+    try:
+        img_dataset = ImageDataset(
+            storage_path=args.output_path,
+            image_dir=args.image_dir,
+            max_images=args.max,
+        )
+        # dataset class validates storage / image dir on load
+        # extract features and pass back to dataset to persist
+        img_dataset.save_features(extract_img_features(img_dataset), "dinov2")
+    except ValueError as err:
+        raise SystemExit(err)
 
 
 def main_mosaic(args: argparse.Namespace):
@@ -28,19 +31,25 @@ def main_mosaic(args: argparse.Namespace):
     )
 
 
-def embeddings_info(args: argparse.Namespace):
-    if not args.embeddings.is_file():
-        raise SystemExit(f"{args.embeddings} is not a file")
-    details = info(args.embeddings)
+def dataset_info(args: argparse.Namespace):
+    img_dataset = ImageDataset(storage_path=args.dataset)
+    # if not args.embeddings.is_file():
+    # raise SystemExit(f"{args.embeddings} is not a file")
+    details = img_dataset.info()  # args.embeddings)
 
-    info_details = [f"Details for {args.embeddings} :"]
+    info_details = [f"Details for {args.dataset} :"]
 
     if "image_paths" in details:
-        info_details.append(f"  {details['image_paths']:,} image paths")
+        whence = ""
+        if details.get(
+            "image_dir"
+        ):  # if image dir is set in attributes, include in info
+            whence = f" from {details['image_dir']}"
+        info_details.append(f"  {details['image_paths']:,} image paths{whence}")
     else:
         info_details.append(" image_path and features columns not found")
 
-    for model, model_details in details["features"].items():
+    for model, model_details in details["models"].items():
         # convert shape tuple into a readable dimension string
         embed_dimensions = "x".join([str(dim) for dim in model_details["embeddings"]])
         info_details.append(f"  {model} extracted features ({embed_dimensions})")
@@ -88,11 +97,11 @@ def main():
 
     info_parser = subparsers.add_parser("info")
     info_parser.add_argument(
-        "embeddings",
+        "dataset",
         type=Path,
-        help="Embeddings file produced by iconoscope embed (.hdf5)",
+        help="Image dataset file created by iconoscope embed (.hdf5)",
     )
-    info_parser.set_defaults(func=embeddings_info)
+    info_parser.set_defaults(func=dataset_info)
 
     parser_mosaic = subparsers.add_parser("mosaic")
     parser_mosaic.add_argument(
