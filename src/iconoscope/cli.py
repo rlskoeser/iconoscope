@@ -21,8 +21,9 @@ def main_embed(args: argparse.Namespace):
 
 
 def main_mosaic(args: argparse.Namespace):
+    img_dataset = ImageDataset(storage_path=args.dataset)
     generate_mosaic(
-        embeddings_path=args.embeddings,
+        img_dataset,
         output=args.output,
         width=args.size.width,
         height=args.size.height,
@@ -105,9 +106,9 @@ def main():
 
     parser_mosaic = subparsers.add_parser("mosaic")
     parser_mosaic.add_argument(
-        "embeddings",
+        "dataset",
         type=Path,
-        help="Embeddings file produced by the embed command (.hdf5)",
+        help="Image dataset file produced by the embed command (.hdf5)",
     )
     parser_mosaic.add_argument(
         "--output",

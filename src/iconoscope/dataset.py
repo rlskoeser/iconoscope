@@ -7,6 +7,8 @@ import polars as pl
 from PIL import Image
 from torch.utils.data import IterableDataset
 
+from iconoscope.umap import reduce_features
+
 #: default image extensions
 DEFAULT_IMG_EXTENSIONS = {".jpg", ".png", ".jpeg", ".tiff"}
 
@@ -174,16 +176,53 @@ class ImageDataset(IterableDataset):
             return info
 
     def load_image_paths(self) -> pl.DataFrame:
-        with h5py.File(self.storage_path, "r") as f:
+        return self.load_data()  # images paths only by default
+
+    def load_data(
+        self, paths=True, features=False, umap=False, model="dinov2"
+    ) -> pl.DataFrame:
+        # if umap is requested, open in read/write mode in case we need to save
+        read_mode = "r+" if umap else "r"
+        with h5py.File(self.storage_path, read_mode) as f:
             img_grp = f["image"]
-            img_dataset = img_grp["paths"]
+            data = {}
+            if paths:
+                img_dataset = img_grp["paths"]
+                # load image paths as string instead of binary string
+                data["image_path"] = img_dataset[:].astype("T")[:]
 
-            # [:] = retrieve all scalar data
-            return pl.DataFrame(
-                data={
-                    # load image paths as string instead of binary string
-                    "image_path": img_dataset[:].astype("T")[:],
-                }
-            )
+            if features or umap:
+                # if umap is requested but has not yet been generated, calculate and save
+                model_grp = img_grp[f"models/{model}"]
+                feature_path = "features"
+                umap_path = "umap"
 
-    # loading model features: same syntax features[:],
+                features_dataset = None
+                if umap:
+                    # umap is requested
+                    if umap_path not in model_grp:
+                        print("** umap not present, calculating")
+                        # load feature dataset
+                        features_dataset = model_grp[feature_path]
+                        umap_coords = reduce_features(features_dataset)
+                        # save as dataset for reuse
+                        print("saving umap coords")
+                        model_grp.create_dataset(
+                            umap_path, data=umap_coords, compression="gzip"
+                        )
+
+                    else:
+                        print("*** loading saved umap coords")
+                        umap_coords = model_grp[umap_path][:]
+
+                    # add to data dictionary to include in returned dataframe
+                    data["umap"] = umap_coords
+
+                if features:
+                    # load feature dataset if not already loaded for umap
+                    if features_dataset is None:
+                        features_dataset = model_grp[feature_path]
+                    # [:] = retrieve all scalar data
+                    data["features"] = features_dataset[:]
+
+            return pl.DataFrame(data=data)
