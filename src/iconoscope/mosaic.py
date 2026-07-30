@@ -3,32 +3,12 @@ import warnings
 from pathlib import Path
 
 import numpy as np
-import umap
 from lap import lapjv
 from PIL import Image
 from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
-from sklearn.decomposition import PCA
 
-from iconoscope.storage import load_features, save_features
-
-
-def reduce_features(features: np.ndarray) -> np.ndarray:
-    """Takes an array of embedding feature vectors and returns normalized coordinates.
-    Uses PCA to reduce, UMAP to transform to two dimensions, then normalize from 0 to 1 for
-    both axes. Returns an array of x,y coordinates for each feature vector in the input."""
-    # use PCA to reduce vectors from 768 to 50 (but handle small datasets < 50)
-    n_components = min(50, features.shape[0], features.shape[1])
-    reduced = PCA(n_components=n_components).fit_transform(features)
-    # use umap to project the reduced vectors into two dimensions
-    coords = umap.UMAP(n_components=2).fit_transform(reduced)
-
-    # determine smalleest and largest coordinates, and then
-    # scale all coordinates to normalize from 0 to 1.0
-    min_coords, max_coords = coords.min(0), coords.max(0)
-    span = np.where(max_coords - min_coords > 0, max_coords - min_coords, 1.0)
-    return (coords - min_coords) / span
-
+from iconoscope.dataset import ImageDataset
 
 LAPJV_CELL_LIMIT = 5000
 
@@ -87,7 +67,10 @@ def assign_to_grid(
         return {
             # take lapjv assigned slot for each image and map to grid position
             # decompose the flat array of grid cells back into row,col format
-            (int(grid_cells[cell_idx][0]), int(grid_cells[cell_idx][1])): item_idx
+            (
+                int(grid_cells[cell_idx][0]),
+                int(grid_cells[cell_idx][1]),
+            ): item_idx
             for cell_idx, item_idx in enumerate(col_ind)
             if item_idx < n_items  # omit any padding items needed to make square
         }
@@ -127,7 +110,7 @@ MAX_THUMB_SIZE = 350
 
 
 def generate_mosaic(
-    embeddings_path: Path,
+    img_dataset: ImageDataset,
     output: Path | None = None,
     width: int = 2000,
     height: int = 2000,
@@ -141,20 +124,10 @@ def generate_mosaic(
     """
 
     if output is None:
-        output = embeddings_path.with_suffix(".jpg")
+        output = img_dataset.storage_path.with_suffix(".jpg")
 
     # load image embeddings from hdf5 file
-    df = load_features(embeddings_path)
-
-    # if coordinates have not already been calculated, reduce and store results
-    if "umap" not in df.columns:
-        print(f"Running UMAP on {df.height} image embeddings…")
-        df = df.with_columns(umap=reduce_features(df["features"].to_numpy()))
-        # save umap to hdf5 file
-        save_features(embeddings_path, df)
-        print(f"Updated {embeddings_path} with UMAP coordinates")
-    else:
-        print(f"Using existing UMAP coordinates in {embeddings_path}")
+    df = img_dataset.load_data(umap=True)
 
     # if a sample is requested, select a random sample of the specified size
     # (subset after UMAP coords are generated, since they should be done for all images)
