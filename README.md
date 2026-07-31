@@ -30,30 +30,31 @@ iconoscope functionality is currently command-line only.
 To generate embeddings for local images, specify the path to a directory containing images and the filename to save the generated embeddings.
 
 ```console
-iconoscope embed path/to/images/ my_collection.parquet
+iconoscope embed path/to/images/ my_collection.h5
 ```
 
-iconoscope will search for image files anywhere within the specified image directory, with supported image extensions (currently .jpg, .jpeg, .png). Image features will be extracted with a pre-trained image model (currently DINOv2) and saved to the specified output (currently parquet only).
+iconoscope will search for image files anywhere within the specified image directory, with supported image extensions (currently .jpg, .jpeg, .png, .tiff). Image features will be extracted with a pre-trained image model (currently DINOv2) and saved to the specified output (currently HDF5 only).
 
 ### mosaic
 
-To generate an embeddings mosaic image, pass the embeddings parquet file created in the first step. The first step is to run UMAP on the embeddings to generate coordinates for positioning images in the mosaic. These are saved in the parquet file so they do not need to be re-computed on subsequent runs. To use all the defaults, specify just the saved embeddings file:
+To generate an embeddings mosaic image, pass the HDF5 dataset file created in the first step. The first step is to run UMAP on the embeddings to generate coordinates for positioning images in the mosaic. These are saved in the HDF5 file so they do not need to be re-computed on subsequent runs. To use all the defaults, specify just the saved dataset file:
 
 ```console
-iconoscope mosaic my_collection.parquet
+iconoscope mosaic my_collection.h5
 ```
 
 By default, this will create a mosaic at `my_collection.jpg`. Output size and filename can be customized with command-line parameters. Thumbnail size is automatically determined to best fit images for the output mosaic size.
 
 ### info
 
-To check the content in an iconoscope parquet file, use `iconoscope info`. This will report the number of images and whether or not the file includes UMAP coordinates. Example:
+To check the content in an iconoscope HDF5 dataset file, use `iconoscope info`. This will report the number of images and whether or not the file includes UMAP coordinates. Example:
 
 ```console
-iconoscope mosaic my_collection.parquet
-Details for my_collection.parquet :
-  4,302 images with features extracted
-  UMAP coordinates
+iconoscope info my_collection.h5
+Details for my_collection.h5 :
+  4,302 image paths
+  dinov2 extracted features (4302x768)
+     umap coordinates (4302x2)
 ```
 
 ## Acknowledgments
