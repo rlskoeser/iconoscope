@@ -1,10 +1,23 @@
 [project]
 name = "iconoscope"
 version = "0.2.0"
-description = "Add your description here"
+description = "python package for exploring image collections using visual similarity based on image embeddings extracted from models"
 readme = "README.md"
+license = "Apache-2.0"
 authors = [
     { name = "rlskoeser", email = "rebecca.s.koeser@princeton.edu" }
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Scientific/Engineering :: Image Processing",
+  "Topic :: Scientific/Engineering :: Visualization"
 ]
 requires-python = ">=3.12"
 dependencies = [
