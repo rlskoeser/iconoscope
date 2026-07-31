@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 
+from iconoscope.cluster import identify_clusters
 from iconoscope.dataset import ImageDataset
 from iconoscope.embed import extract_img_features
 from iconoscope.mosaic import generate_mosaic
@@ -42,7 +43,6 @@ def dataset_info(args: argparse.Namespace):
     # if not args.embeddings.is_file():
     # raise SystemExit(f"{args.embeddings} is not a file")
     details = img_dataset.info()  # args.embeddings)
-
     info_details = [f"Details for {args.dataset} :"]
 
     if "image_paths" in details:
@@ -61,9 +61,20 @@ def dataset_info(args: argparse.Namespace):
         info_details.append(f"  {model} extracted features ({embed_dims})")
         if "umap" in model_details:
             umap_dims = dimensions(model_details["umap"])
-            info_details.append(f"     umap coordinates ({umap_dims})")
+            info_details.append(f"\tumap coordinates ({umap_dims})")
+        if "cluster" in model_details:
+            label_size = model_details["cluster"]["size"]
+            cluster_k = model_details["cluster"]["k"]
+            info_details.append(f"\t{label_size:,} cluster labels (k={cluster_k})")
 
     print("\n".join(info_details))
+
+
+def dataset_cluster(args: argparse.Namespace):
+    img_dataset = ImageDataset(storage_path=args.dataset)
+    labels = identify_clusters(img_dataset, args.n_clusters)
+    print(labels)
+    img_dataset.save_clusters(labels, args.n_clusters, "dinov2")
 
 
 def size_tuple(size_str: str | int) -> argparse.Namespace:
@@ -85,6 +96,7 @@ def main():
     parser = argparse.ArgumentParser(prog="iconoscope")
     subparsers = parser.add_subparsers()
 
+    ## embed : create dataset and extract features
     parser_embed = subparsers.add_parser("embed")
     parser_embed.add_argument(
         "image_dir",
@@ -101,6 +113,7 @@ def main():
     )
     parser_embed.set_defaults(func=main_embed)
 
+    ## dataset info
     info_parser = subparsers.add_parser("info")
     info_parser.add_argument(
         "dataset",
@@ -109,6 +122,7 @@ def main():
     )
     info_parser.set_defaults(func=dataset_info)
 
+    ## generate mosaic
     parser_mosaic = subparsers.add_parser("mosaic")
     parser_mosaic.add_argument(
         "dataset",
@@ -141,6 +155,17 @@ def main():
     )
     parser_mosaic.set_defaults(func=main_mosaic)
 
+    ## cluster image features
+    cluster_parser = subparsers.add_parser("cluster")
+    cluster_parser.add_argument(
+        "dataset",
+        type=Path,
+        help="Image dataset file created by iconoscope embed (.hdf5)",
+    )
+    cluster_parser.add_argument("n_clusters", type=int, help="Number of clusters")
+    cluster_parser.set_defaults(func=dataset_cluster)
+
+    # parse arguments and call the appropriate method
     args = parser.parse_args()
     args.func(args)
 
