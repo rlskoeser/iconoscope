@@ -57,6 +57,20 @@ Details for my_collection.h5 :
      umap coordinates (4302x2)
 ```
 
+## HDF5 file layout
+
+iconoscope stores image paths, extracted features, and derived data (like UMAP coordinates) in a single HDF5 file, organized per model so multiple embedding models can coexist in the same dataset:
+
+```
+my_collection.h5
+└── image/                 (attrs: image_dir)
+    ├── paths               # image file paths, shape (N,)
+    └── models/
+        └── dinov2/         # one group per embedding model
+            ├── features    # embedding vectors, shape (N, embed_dim)
+            └── umap        # 2D UMAP coordinates, shape (N, 2) [optional, added by `mosaic`]
+```
+
 ## Acknowledgments
 
 Substantial portions of this code were developed with support from
