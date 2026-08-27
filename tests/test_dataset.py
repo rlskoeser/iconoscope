@@ -9,17 +9,26 @@ from iconoscope.dataset import ImageDataset, find_images
 def test_init_validation(tmp_path):
     image_dir = tmp_path / "images"
     # non-existent
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not a directory"):
         ImageDataset(image_dir=image_dir, storage_path=tmp_path / "a.h5")
     # file instead of dir
     img_file = tmp_path / "img.png"
     img_file.touch()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not a directory"):
         ImageDataset(image_dir=img_file, storage_path=tmp_path / "a.h5")
 
-    # directory - no error, returns new object
+    # image dir is required when h5 file doesn't exist
+    with pytest.raises(ValueError, match="image_dir is required"):
+        ImageDataset(storage_path=tmp_path / "a.h5")
+
+    # existing directory - no error, returns new object
     image_dir.mkdir()
     assert ImageDataset(image_dir=image_dir, storage_path=tmp_path / "a.h5")
+
+    # storage path exists - image dir is not required
+    h5_datafile = tmp_path / "z.h5"
+    h5_datafile.touch()  # currently doesn't validate (probably should in future)
+    assert ImageDataset(storage_path=h5_datafile)
 
 
 def test_collate_returns_lists():
@@ -38,6 +47,9 @@ def test_collate_single_item():
     imgs, paths = ImageDataset.collate([(img, "/x.png")])
     assert len(imgs) == 1
     assert paths == ["/x.png"]
+
+
+## test find images utility method
 
 
 def test_find_images(tmp_image_dir: Path):
