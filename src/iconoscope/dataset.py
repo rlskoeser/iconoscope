@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,6 +10,8 @@ from PIL import Image
 from torch.utils.data import IterableDataset
 
 from iconoscope.umap import reduce_features
+
+logger = logging.getLogger(__name__)
 
 #: default image extensions
 DEFAULT_IMG_EXTENSIONS = {".jpg", ".png", ".jpeg", ".tiff"}
@@ -98,12 +101,11 @@ class ImageDataset(IterableDataset):
 
     def __iter__(self) -> Iterator[tuple[Image.Image, str]]:
         for file_path in self.get_image_paths():
-            # TODO: still needs better error handling
+            # may still need better error handling
             try:
                 img = Image.open(file_path).convert("RGB")
             except OSError as err:
-                # TODO: switch to logging/warning
-                print(f"Error loading {file_path}: {err}")
+                logger.warning(f"Error loading {file_path}: {err}")
                 continue
             # yield a tuple of image object and file path as string
             yield img, str(file_path)

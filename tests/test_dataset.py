@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Iterable
 from unittest.mock import patch
@@ -79,6 +80,20 @@ def test_iter(tmp_path: Path, tmp_image_dir: Path):
         assert isinstance(img_tuple[0], Image.Image)
         assert isinstance(img_tuple[1], str)
         assert img_tuple[1].endswith(".jpg")
+
+
+def test_iter_err(tmp_path: Path, tmp_image_dir: Path, caplog):
+    caplog.set_level(logging.WARN)
+    # handle image file that can't be loaded
+    h5_datafile = tmp_path / "data.h5"
+    # add a non-image file with an image extension
+    bad_img = tmp_image_dir / "bogus.png"
+    bad_img.write_text("this is not an image")
+    img_ds = ImageDataset(image_dir=tmp_image_dir, storage_path=h5_datafile)
+    images = list(img_ds.__iter__())
+    assert len(images) == 3  # should return all fixtures but nothing else
+    assert len(caplog.record_tuples) == 1
+    assert "Error loading" in caplog.text  # warns about the problem
 
 
 def test_collate_returns_lists():
