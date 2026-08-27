@@ -209,7 +209,12 @@ class ImageDataset(IterableDataset):
         return self.load_data()  # images paths only by default
 
     def load_data(
-        self, paths=True, features=False, umap=False, model="dinov2"
+        self,
+        paths=True,
+        features=False,
+        umap=False,
+        clusters=False,
+        model="dinov2",
     ) -> pl.DataFrame:
         # if umap is requested, open in read/write mode in case we need to save
         read_mode = "r+" if umap else "r"
@@ -226,6 +231,7 @@ class ImageDataset(IterableDataset):
                 model_grp = img_grp[f"models/{model}"]
                 feature_path = "features"
                 umap_path = "umap"
+                cluster_path = "cluster"
 
                 features_dataset = None
                 if umap:
@@ -254,5 +260,15 @@ class ImageDataset(IterableDataset):
                         features_dataset = model_grp[feature_path]
                     # [:] = retrieve all scalar data
                     data["features"] = features_dataset[:]
+
+                # include cluster labels when requested and present in the data
+                if clusters and cluster_path in model_grp:
+                    cluster_dataset = model_grp[cluster_path]
+                    data["cluster"] = cluster_dataset[:]
+
+                # TODO: update to support cluster results for multiple k
+                # maybe cluster/kmeans_{k} so they can be managed individually
+                # move cluster generation logic to dataset; support cluster/save on demand?
+                # then load as cluster_k{n} in dataframe when requested
 
             return pl.DataFrame(data=data)
