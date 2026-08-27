@@ -85,15 +85,13 @@ class ImageDataset(IterableDataset):
         # otherwise, storage exists and we will load paths from it
 
     def get_image_paths(self) -> Iterator[Path]:
-        print("get image paths method in class")
-        print(self.load_image_paths)
-        print(f"storage path {self.storage_path} exists? {self.storage_path.exists()}")
+        """Yield a list of image paths either from configured image directory or stored data file"""
         if self.storage_path.exists():
-            print("loading images from storage")
+            # print("loading images from storage")  # add logging?
             for row in self.load_image_paths().iter_rows(named=True):
                 yield Path(row["image_path"])
         elif self.image_dir:
-            print("finding images on disk")
+            # print("finding images on disk")
             yield from find_images(self.image_dir, max=self.max_images)
 
     ## iterable dataset logic

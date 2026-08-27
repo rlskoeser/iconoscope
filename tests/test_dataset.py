@@ -62,9 +62,23 @@ def test_get_image_paths(tmp_path: Path, tmp_image_dir: Path):
         img_paths = list(img_paths)
         assert len(img_paths) == len(test_image_paths)
         for i, path in enumerate(img_paths):
-            print(path)
             assert isinstance(path, Path)
             assert str(path) == test_image_paths[i]
+
+
+def test_iter(tmp_path: Path, tmp_image_dir: Path):
+    h5_datafile = tmp_path / "data.h5"
+    img_ds = ImageDataset(image_dir=tmp_image_dir, storage_path=h5_datafile)
+    images = img_ds.__iter__()
+    assert isinstance(images, Iterable)
+    images = list(images)
+    assert len(images) == 3  # matches fixture data
+    # yield a tuple of image object and file path as string
+    # yield img, str(file_path)
+    for img_tuple in images:
+        assert isinstance(img_tuple[0], Image.Image)
+        assert isinstance(img_tuple[1], str)
+        assert img_tuple[1].endswith(".jpg")
 
 
 def test_collate_returns_lists():
