@@ -85,6 +85,9 @@ class ImageDataset(IterableDataset):
         # otherwise, storage exists and we will load paths from it
 
     def get_image_paths(self) -> Iterator[Path]:
+        print("get image paths method in class")
+        print(self.load_image_paths)
+        print(f"storage path {self.storage_path} exists? {self.storage_path.exists()}")
         if self.storage_path.exists():
             print("loading images from storage")
             for row in self.load_image_paths().iter_rows(named=True):
