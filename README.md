@@ -37,17 +37,17 @@ iconoscope will search for image files anywhere within the specified image direc
 
 ### mosaic
 
-To generate an embeddings mosaic image, pass the HDF5 dataset file created in the first step. The first step is to run UMAP on the embeddings to generate coordinates for positioning images in the mosaic. These are saved in the HDF5 file so they do not need to be re-computed on subsequent runs. To use all the defaults, specify just the saved dataset file:
+To generate an embeddings mosaic image, pass the HDF5 dataset file created by the embed command. First, iconoscope will run UMAP (dimensionality reduction) on the embeddings to generate 2D coordinates for positioning images in the mosaic. The number of columns and rows for the mosaic is determined by the requested output size and the number of images; images are slotted into the grid based on UMAP coordinates, and then resized to fit into a grid cell. The UMAP coordinates are not generated with a predetermined seed, but the results are saved in the HDF5 file, so they can be reused on subsequent runs. To generate a mosaic with all the defaults options, run the mosaic command and specify dataset file:
 
 ```console
 iconoscope mosaic my_collection.h5
 ```
 
-By default, this will create a mosaic at `my_collection.jpg`. Output size and filename can be customized with command-line parameters. Thumbnail size is automatically determined to best fit images for the output mosaic size.
+By default, this will create a mosaic based on the name of the collection, e.g. `my_collection.jpg`. Output size and filename can be customized with command-line parameters. Thumbnail size is automatically determined to best fit images for the output mosaic size (currently converts all images to squares).
 
 ### info
 
-To check the content in an iconoscope HDF5 dataset file, use `iconoscope info`. This will report the number of images and whether or not the file includes UMAP coordinates. Example:
+To check the content of an iconoscope HDF5 dataset file, use `iconoscope info`. This will report the number of images and what other information is included, e.g. UMAP coordinates. Example:
 
 ```console
 iconoscope info my_collection.h5
@@ -59,7 +59,7 @@ Details for my_collection.h5 :
 
 ## HDF5 file layout
 
-iconoscope stores image paths, extracted features, and derived data (like UMAP coordinates) in a single HDF5 file, organized per model so multiple embedding models can coexist in the same dataset:
+iconoscope stores image paths, extracted features, and derived data (like UMAP coordinates) in a single HDF5 file. organized per model so multiple embedding models can coexist in the same dataset:
 
 ```
 my_collection.h5

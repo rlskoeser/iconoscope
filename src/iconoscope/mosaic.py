@@ -117,9 +117,9 @@ def generate_mosaic(
     jpeg_quality: int = 90,
     sample_size: int | None = None,
 ) -> None:
-    """Generate a mosaic of images based on previous calculated image embeddings.
-    Load image feature vectors from the embeddings parquet file, reduce with PCA+UMAP,
-    update parquet file with umap coordinates, then assign to grid slots and create
+    """Generate a mosaic of images based on previously calculated image embeddings (feature vectors).
+    Load image feature vectors from the specified image dataset file, get or generate 2D coordinates
+    via PCA+UMAP (saved in the dataset file), then assign to grid slots and create
     a mosaic image of thumbnails.
     """
 

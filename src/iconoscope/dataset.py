@@ -65,7 +65,7 @@ class ImageDataset(IterableDataset):
     #: path to hdf5 storage for image dataset
     storage_path: Path
 
-    #: base directory for images in this dataset - OPTIONAL (save as an attr)
+    #: base directory for images in this dataset - OPTIONAL (saved as an attr in hf5 on creation)
     image_dir: Path | None = None
 
     #: image extensions; if not specified, uses the defaults
