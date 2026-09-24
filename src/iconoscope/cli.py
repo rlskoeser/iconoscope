@@ -18,6 +18,13 @@ def size_tuple(size_str: str | int) -> argparse.Namespace:
     return argparse.Namespace(width=width, height=height)
 
 
+def existing_directory(value: str) -> Path:
+    path = Path(value)
+    if not path.is_dir():
+        raise argparse.ArgumentTypeError(f"{path} is not a directory")
+    return path
+
+
 HANDLERS = {
     "embed": ("iconoscope.commands.embed", "main"),
     "info": ("iconoscope.commands.info", "main"),
@@ -40,7 +47,7 @@ def main():
     parser_embed = subparsers.add_parser("embed")
     parser_embed.add_argument(
         "image_dir",
-        type=Path,
+        type=existing_directory,
         help="Directory containing images to embed (can be nested)",
     )
     parser_embed.add_argument(

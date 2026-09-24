@@ -32,6 +32,17 @@ def test_embed_args(tmp_path: Path):
     assert args.max is None
 
 
+def test_embed_missing_dir_does_not_import_handler(tmp_path: Path):
+    with (
+        patch("iconoscope.cli.import_module") as importer,
+        patch("sys.argv", ["iconoscope", "embed", str(tmp_path / "missing"), "out.h5"]),
+        pytest.raises(SystemExit),
+    ):
+        cli.main()
+
+    importer.assert_not_called()
+
+
 def test_cli_lazy_load():
     # for speed, calling the cli should not import heavy dependencies
     code = """
