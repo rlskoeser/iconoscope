@@ -1,6 +1,7 @@
 import argparse
 import subprocess
 import sys
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -38,13 +39,19 @@ def test_main_embed_missing_dir(tmp_path: Path):
 def test_cli_import_does_not_load_heavy_dependencies():
     code = """
 import sys
+import time
+started = time.perf_counter()
 import iconoscope.cli
 
 heavy = {"torch", "transformers", "umap", "sklearn"}
 loaded = heavy.intersection(sys.modules)
 assert not loaded, f"heavy dependencies loaded: {sorted(loaded)}"
+print(f"{time.perf_counter() - started:.4f}")
 """
-    subprocess.run([sys.executable, "-c", code], check=True)
+    result = subprocess.run(
+        [sys.executable, "-c", code], check=True, capture_output=True, text=True
+    )
+    print(f"iconoscope.cli import: {result.stdout.strip()}s")
 
 
 ## custom size type for argparse to support specifying size as wxh
