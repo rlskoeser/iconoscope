@@ -162,6 +162,96 @@ def test_save_features_preserves_existing_models_and_derived_data(tmp_path: Path
         assert h5_file["image/models/dinov2/cluster"].attrs["n_clusters"] == 2
 
 
+def _dataset_with_features(tmp_path: Path) -> ImageDataset:
+    image_dir = tmp_path / "images"
+    image_dir.mkdir()
+    dataset = ImageDataset(
+        storage_path=tmp_path / "data.h5",
+        image_dir=image_dir,
+    )
+    dataset.save_features(
+        pl.DataFrame(
+            {
+                "image_path": ["/images/one.jpg", "/images/two.jpg"],
+                "features": np.array([[1.0, 0.0], [0.0, 1.0]]),
+            }
+        ),
+        "dinov2",
+    )
+    return dataset
+
+
+def test_save_features_rejects_different_image_paths(tmp_path: Path):
+    dataset = _dataset_with_features(tmp_path)
+    with pytest.raises(ValueError, match="image paths"):
+        dataset.save_features(
+            pl.DataFrame(
+                {
+                    "image_path": ["/images/one.jpg", "/images/other.jpg"],
+                    "features": np.array([[2.0, 0.0], [0.0, 2.0]]),
+                }
+            ),
+            "clip",
+        )
+
+
+def test_save_features_rejects_mismatched_feature_rows(tmp_path: Path):
+    dataset = _dataset_with_features(tmp_path)
+    with pytest.raises(ValueError, match="row"):
+        dataset.save_features(
+            pl.DataFrame(
+                {
+                    "image_path": ["/images/one.jpg"],
+                    "features": np.array([[2.0, 0.0]]),
+                }
+            ),
+            "clip",
+        )
+
+
+def test_save_features_rejects_non_2d_features(tmp_path: Path):
+    dataset = _dataset_with_features(tmp_path)
+    with pytest.raises(ValueError, match="2-dimensional"):
+        dataset.save_features(
+            pl.DataFrame(
+                {
+                    "image_path": ["/images/one.jpg", "/images/two.jpg"],
+                    "features": [2.0, 3.0],
+                }
+            ),
+            "clip",
+        )
+
+
+def test_save_features_rejects_unsupported_columns(tmp_path: Path):
+    dataset = _dataset_with_features(tmp_path)
+    with pytest.raises(ValueError, match="unsupported"):
+        dataset.save_features(
+            pl.DataFrame(
+                {
+                    "image_path": ["/images/one.jpg", "/images/two.jpg"],
+                    "features": np.array([[2.0, 0.0], [0.0, 2.0]]),
+                    "label": ["a", "b"],
+                }
+            ),
+            "clip",
+        )
+
+
+def test_save_features_defines_same_model_behavior(tmp_path: Path):
+    dataset = _dataset_with_features(tmp_path)
+    with pytest.raises(ValueError, match="model.*already exists"):
+        dataset.save_features(
+            pl.DataFrame(
+                {
+                    "image_path": ["/images/one.jpg", "/images/two.jpg"],
+                    "features": np.array([[2.0, 0.0], [0.0, 2.0]]),
+                }
+            ),
+            "dinov2",
+        )
+
+
 ## test find images utility method
 
 

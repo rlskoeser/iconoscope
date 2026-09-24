@@ -121,43 +121,69 @@ class ImageDataset(IterableDataset):
     ## storage functionality
 
     def save_features(self, df: pl.DataFrame, model_name: str) -> None:
-        # save image model features to dataset file
-        #
-        # TODO
-        #  validation / checks:
-        # - required/expected columns
+        """Save features for a model without replacing unrelated HDF5 data."""
+        expected_columns = {"image_path", "features"}
+        missing_columns = expected_columns - set(df.columns)
+        if missing_columns:
+            raise ValueError(
+                f"Missing required columns: {', '.join(sorted(missing_columns))}"
+            )
+        unsupported_columns = set(df.columns) - expected_columns
+        if unsupported_columns:
+            raise ValueError(
+                f"unsupported columns: {', '.join(sorted(unsupported_columns))}"
+            )
+
+        image_paths = df["image_path"].to_numpy()
+        features = df["features"].to_numpy()
+        if features.ndim != 2:
+            raise ValueError("features must be 2-dimensional")
 
         # open as append so we can update without overwriting
         with h5py.File(self.storage_path, "a") as f:
-            # get group for image information; create group if it doesn't already exist
-            try:
-                img_grp = f["image"]
-            except KeyError:
-                img_grp = f.create_group("image")
+            # get group for image information; create it if needed
+            img_grp = f.require_group("image")
 
-            # save image directory when first creating dataset
+            # Existing paths are shared by every model and must not change
+            # between saves. Validate them before mutating the file.
+            if "paths" in img_grp:
+                stored_paths_dataset = img_grp["paths"]
+                if stored_paths_dataset.size != df.height:
+                    raise ValueError(
+                        "image paths and features must have the same row count as "
+                        "the existing dataset"
+                    )
+                stored_paths = stored_paths_dataset[:]
+                stored_paths = [
+                    path.decode() if isinstance(path, bytes) else str(path)
+                    for path in stored_paths
+                ]
+                requested_paths = [str(path) for path in image_paths]
+                if stored_paths != requested_paths:
+                    raise ValueError("image paths do not match the existing dataset")
+
+            # A same-model save is rejected so its derived data cannot become stale
+            # accidentally. A caller can choose a new model name or remove the model
+            # explicitly before saving.
+            models_grp = img_grp.get("models")
+            if models_grp is not None and model_name in models_grp:
+                raise ValueError(f"model '{model_name}' already exists")
+
+            # Save shared metadata and create the new model only after validation.
             # TODO: also save max if specified and extensions if not default
             if self.image_dir is not None:
-                # convert path to string
                 img_grp.attrs["image_dir"] = str(self.image_dir)
-
-            # save image paths as a dataset if not already saved
             if "paths" not in img_grp:
                 img_grp.create_dataset(
-                    "paths", data=df["image_path"].to_numpy(), compression="gzip"
+                    "paths", data=image_paths, compression="gzip"
                 )
-            # for each model, create a group to gather related/downstream information
-            model_grp = img_grp.create_group(f"models/{model_name}")
+            models_grp = img_grp.require_group("models")
+            model_grp = models_grp.create_group(model_name)
             # save extracted features as a dataset
             model_grp.create_dataset(
-                "features", data=df["features"].to_numpy(), compression="gzip"
+                "features", data=features, compression="gzip"
             )
             # img_grp.attrs["last_modified"] = datetime.now().isoformat()  # needed/useful?
-
-            # check and report if the dataframe has unexpected columns that are not persisted
-            remainder_cols = set(df.columns) - {"image_path", "features"}
-            if remainder_cols:
-                print("Warning: unsaved columns (%s)" % ",".join(remainder_cols))
 
     def save_clusters(
         self, labels: np.ndarray, n_clusters: int, model_name: str
