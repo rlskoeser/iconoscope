@@ -60,6 +60,20 @@ def test_create_args(tmp_path: Path):
     assert args.output_path == out
 
 
+def test_create_reports_image_total(tmp_path: Path, capsys):
+    out = tmp_path / "data.h5"
+    from iconoscope.commands import create as create_command
+
+    with patch("iconoscope.commands.create.ImageDataset.create") as create:
+        dataset = create.return_value
+        dataset.info.return_value = {"image_paths": 12}
+        create_command.main(
+            argparse.Namespace(image_dir=tmp_path, output_path=out, max=None)
+        )
+
+    assert "12" in capsys.readouterr().out
+
+
 def test_cli_lazy_load():
     # for speed, calling the cli should not import heavy dependencies
     code = """
