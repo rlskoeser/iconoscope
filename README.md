@@ -25,12 +25,13 @@ pip install iconoscope
 
 iconoscope functionality is currently command-line only.
 
-### embed
+### create
 
-To generate embeddings for local images, specify the path to a directory containing images and the filename to save the generated embeddings.
+Create an image inventory by discovering and validating local images. This step
+does not load an embedding model.
 
 ```console
-iconoscope embed path/to/images/ my_collection.h5
+iconoscope create path/to/images/ my_collection.h5
 ```
 
 iconoscope will search for image files anywhere within the specified image directory. Supported image extensions are:
@@ -42,7 +43,14 @@ iconoscope will search for image files anywhere within the specified image direc
 - `.webp`
 - `.avif`
 
-Image features will be extracted with a pre-trained image model (currently DINOv2) and saved to the specified output (currently HDF5 only).
+### embed
+
+Extract features with a pre-trained image model (currently DINOv2) and save
+them to an existing dataset:
+
+```console
+iconoscope embed my_collection.h5
+```
 
 ### mosaic
 

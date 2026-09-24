@@ -26,6 +26,7 @@ def existing_directory(value: str) -> Path:
 
 
 HANDLERS = {
+    "create": ("iconoscope.commands.create", "main"),
     "embed": ("iconoscope.commands.embed", "main"),
     "info": ("iconoscope.commands.info", "main"),
     "mosaic": ("iconoscope.commands.mosaic", "main"),
@@ -43,20 +44,26 @@ def main():
     parser = argparse.ArgumentParser(prog="iconoscope")
     subparsers = parser.add_subparsers(dest="command")
 
-    ## embed : create dataset and extract features
-    parser_embed = subparsers.add_parser("embed")
-    parser_embed.add_argument(
+    ## create : discover and validate images into a dataset
+    parser_create = subparsers.add_parser("create")
+    parser_create.add_argument(
         "image_dir",
         type=existing_directory,
-        help="Directory containing images to embed (can be nested)",
+        help="Directory containing images to inventory (can be nested)",
     )
-    parser_embed.add_argument(
-        "output_path",
-        type=Path,
-        help="File path for saved embeddings (.hdf5)",
+    parser_create.add_argument(
+        "output_path", type=Path, help="File path for the image dataset (.hdf5)"
     )
-    parser_embed.add_argument(
+    parser_create.add_argument(
         "-m", "--max", type=int, help="Limit to specified number of images"
+    )
+
+    ## embed : extract features from an existing dataset
+    parser_embed = subparsers.add_parser("embed")
+    parser_embed.add_argument(
+        "dataset",
+        type=Path,
+        help="Image dataset file created by iconoscope create (.hdf5)",
     )
 
     ## dataset info
@@ -109,10 +116,13 @@ def main():
     cluster_parser.add_argument("n_clusters", type=int, help="Number of clusters")
     parser.set_defaults(func=dispatch)
 
-    # parse arguments and call the appropriate method
+    # Validate embed sources before lazy-loading the embedding stack.
     args = parser.parse_args()
     if not args.command:
         parser.error("a command is required")
+    if args.command == "embed":
+        if not args.dataset.is_file():
+            parser.error(f"{args.dataset} is not an existing dataset file")
     args.func(args)
 
 

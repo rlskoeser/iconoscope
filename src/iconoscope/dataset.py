@@ -74,6 +74,53 @@ class ImageDataset(IterableDataset):
     #: optional limit for number of images to find
     max_images: int | None = None
 
+    @classmethod
+    def create(
+        cls,
+        image_dir: Path,
+        storage_path: Path,
+        *,
+        extensions: set[str] | None = None,
+        max_images: int | None = None,
+    ) -> "ImageDataset":
+        """Create an image inventory without loading an embedding model.
+
+        Discovery remains suffix-based via :func:`find_images`; opening each
+        candidate is the validation step that keeps unusable files out of the
+        persistent inventory.
+        """
+        image_dir = Path(image_dir)
+        storage_path = Path(storage_path)
+        if not image_dir.is_dir():
+            raise ValueError(f"Image directory `{image_dir}` is not a directory")
+        if storage_path.exists():
+            raise ValueError(f"Dataset already exists: {storage_path}")
+
+        valid_paths = []
+        for path in find_images(
+            image_dir, extensions=extensions, max=max_images
+        ):
+            try:
+                with Image.open(path) as image:
+                    image.verify()
+            except (OSError, SyntaxError) as err:
+                logger.warning("Skipping invalid image %s: %s", path, err)
+                continue
+            valid_paths.append(str(path))
+
+        if not valid_paths:
+            raise ValueError(f"No valid images found in `{image_dir}`")
+
+        with h5py.File(storage_path, "w") as h5_file:
+            image_group = h5_file.create_group("image")
+            image_group.attrs["image_dir"] = str(image_dir)
+            image_group.create_dataset(
+                "paths", data=valid_paths, compression="gzip"
+            )
+            image_group.create_group("models")
+
+        return cls(storage_path=storage_path)
+
     def __post_init__(self):
         # when creating a new collection, storage will not exist so image dir is required
         if not self.storage_path.exists():

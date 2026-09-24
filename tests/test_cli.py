@@ -16,32 +16,48 @@ MAX_CLI_IMPORT_SECONDS = 1.0
 
 def test_embed_args(tmp_path: Path):
     # Test parser arguments without importing the embedding stack.
-    out = tmp_path / "out.h5"
+    dataset = tmp_path / "data.h5"
+    dataset.touch()
     handler = MagicMock()
     command_module = ModuleType("iconoscope.commands.embed")
     command_module.main = handler
     with (
         patch("iconoscope.cli.import_module", return_value=command_module) as importer,
-        patch("sys.argv", ["iconoscope", "embed", str(tmp_path), str(out)]),
+        patch("sys.argv", ["iconoscope", "embed", str(dataset)]),
     ):
         cli.main()
 
     importer.assert_called_once_with("iconoscope.commands.embed")
     args = handler.call_args.args[0]
-    assert args.image_dir == tmp_path
-    assert args.output_path == out
-    assert args.max is None
+    assert args.dataset == dataset
 
 
-def test_embed_missing_dir_does_not_import_handler(tmp_path: Path):
+def test_embed_missing_dataset_does_not_import_handler(tmp_path: Path):
     with (
         patch("iconoscope.cli.import_module") as importer,
-        patch("sys.argv", ["iconoscope", "embed", str(tmp_path / "missing"), "out.h5"]),
+        patch("sys.argv", ["iconoscope", "embed", str(tmp_path / "missing.h5")]),
         pytest.raises(SystemExit),
     ):
         cli.main()
 
     importer.assert_not_called()
+
+
+def test_create_args(tmp_path: Path):
+    out = tmp_path / "data.h5"
+    handler = MagicMock()
+    command_module = ModuleType("iconoscope.commands.create")
+    command_module.main = handler
+    with (
+        patch("iconoscope.cli.import_module", return_value=command_module) as importer,
+        patch("sys.argv", ["iconoscope", "create", str(tmp_path), str(out)]),
+    ):
+        cli.main()
+
+    importer.assert_called_once_with("iconoscope.commands.create")
+    args = handler.call_args.args[0]
+    assert args.image_dir == tmp_path
+    assert args.output_path == out
 
 
 def test_cli_lazy_load():
