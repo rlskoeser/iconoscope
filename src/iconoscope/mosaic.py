@@ -37,12 +37,12 @@ def assign_to_grid(
 
     # generate an array of grid coordinates for the requested grid size
     grid_cells = np.array(
-        [(r, c) for r in range(grid_rows) for c in range(grid_cols)],
+        [(c, r) for r in range(grid_rows) for c in range(grid_cols)],
         dtype=np.float32,
     )
-    # generate a grid of center-cell coordinates from 0.0 to 1.0, for placement
+    # Keep grid centers in the same x,y coordinate order as the input coordinates.
     cell_centers = (grid_cells + 0.5) / np.array(
-        [[grid_rows, grid_cols]], dtype=np.float32
+        [[grid_cols, grid_rows]], dtype=np.float32
     )
     # determine aspect ratio for the requested grid
     aspect = grid_cols / grid_rows
@@ -63,13 +63,13 @@ def assign_to_grid(
         # lap.lapjv returns a tuple of optional cost, reverse mapping, and column index.
         # The column index is the assigned mapping: array of item indices assigned to each cell
         _, _, col_ind = lapjv(cost)
-        # use lapjv column index to map back to column/row placement in the grid
+        # use lapjv column index to map back to row/column placement in the grid
         return {
             # take lapjv assigned slot for each image and map to grid position
-            # decompose the flat array of grid cells back into row,col format
+            # decompose the flat array of x,y grid cells back into row,col format
             (
-                int(grid_cells[cell_idx][0]),
                 int(grid_cells[cell_idx][1]),
+                int(grid_cells[cell_idx][0]),
             ): item_idx
             for cell_idx, item_idx in enumerate(col_ind)
             if item_idx < n_items  # omit any padding items needed to make square
@@ -98,8 +98,8 @@ def assign_to_grid(
                 # if nearest cells are already taken, expand the search - quadruple k and try again
                 k = min(k * 4, n_cells)
             used.add(chosen)
-            # add the chosen grid x,y as integers to the assignment dict for item index
-            assignments[(int(grid_cells[chosen][0]), int(grid_cells[chosen][1]))] = (
+            # add the chosen grid x,y as row,col integers for the assignment
+            assignments[(int(grid_cells[chosen][1]), int(grid_cells[chosen][0]))] = (
                 item_idx
             )
         return assignments
