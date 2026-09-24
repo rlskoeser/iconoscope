@@ -2,7 +2,6 @@ import argparse
 import logging
 import subprocess
 import sys
-import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -39,7 +38,8 @@ def test_main_embed_missing_dir(tmp_path: Path):
         cli.dispatch(argparse.Namespace(command="embed", **vars(args)))
 
 
-def test_cli_import_does_not_load_heavy_dependencies():
+def test_cli_lazy_load():
+    # for speed, calling the cli should not import heavy dependencies
     code = """
 import sys
 import time
