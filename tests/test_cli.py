@@ -11,6 +11,7 @@ import pytest
 from iconoscope import cli
 
 logger = logging.getLogger(__name__)
+MAX_CLI_IMPORT_SECONDS = 1.0
 
 
 def test_embed_args(tmp_path: Path):
@@ -59,7 +60,12 @@ print(f"{time.perf_counter() - started:.4f}")
     result = subprocess.run(
         [sys.executable, "-c", code], check=True, capture_output=True, text=True
     )
-    logger.info("iconoscope.cli import: %ss", result.stdout.strip())
+    elapsed = float(result.stdout.strip())
+    logger.info("iconoscope.cli import: %ss", elapsed)
+    assert elapsed < MAX_CLI_IMPORT_SECONDS, (
+        f"iconoscope.cli import took {elapsed:.4f}s; "
+        f"expected under {MAX_CLI_IMPORT_SECONDS:.1f}s"
+    )
 
 
 ## custom size type for argparse to support specifying size as wxh
