@@ -1,36 +1,71 @@
 import argparse
+import logging
+import subprocess
+import sys
 from pathlib import Path
-from unittest.mock import patch
+from types import ModuleType
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from iconoscope import cli
 
+logger = logging.getLogger(__name__)
+MAX_CLI_IMPORT_SECONDS = 1.0
 
-@patch("iconoscope.cli.ImageDataset")
-@patch("iconoscope.cli.extract_img_features")
-def test_embed_args(mock_extract_features, mock_img_dataset, tmp_path: Path):
-    # test cli args are passed correctly for embed function
+
+def test_embed_args(tmp_path: Path):
+    # Test parser arguments without importing the embedding stack.
     out = tmp_path / "out.h5"
-    with patch("sys.argv", ["iconoscope", "embed", str(tmp_path), str(out)]):
+    handler = MagicMock()
+    command_module = ModuleType("iconoscope.commands.embed")
+    command_module.main = handler
+    with (
+        patch("iconoscope.cli.import_module", return_value=command_module) as importer,
+        patch("sys.argv", ["iconoscope", "embed", str(tmp_path), str(out)]),
+    ):
         cli.main()
 
-    mock_img_dataset.assert_called_with(
-        storage_path=out, image_dir=tmp_path, max_images=None
-    )
-    mock_extract_features.assert_called_with(mock_img_dataset.return_value)
-    mock_img_dataset.return_value.save_features.assert_called_with(
-        mock_extract_features.return_value, "dinov2"
-    )
+    importer.assert_called_once_with("iconoscope.commands.embed")
+    args = handler.call_args.args[0]
+    assert args.image_dir == tmp_path
+    assert args.output_path == out
+    assert args.max is None
 
 
-def test_main_embed_missing_dir(tmp_path: Path):
-    missing_dir = tmp_path / "no_such_dir"
-    args = argparse.Namespace(
-        image_dir=missing_dir, output_path=tmp_path / "out.h5", max=None
+def test_embed_missing_dir_does_not_import_handler(tmp_path: Path):
+    with (
+        patch("iconoscope.cli.import_module") as importer,
+        patch("sys.argv", ["iconoscope", "embed", str(tmp_path / "missing"), "out.h5"]),
+        pytest.raises(SystemExit),
+    ):
+        cli.main()
+
+    importer.assert_not_called()
+
+
+def test_cli_lazy_load():
+    # for speed, calling the cli should not import heavy dependencies
+    code = """
+import sys
+import time
+started = time.perf_counter()
+import iconoscope.cli
+
+heavy = {"torch", "transformers", "umap", "sklearn"}
+loaded = heavy.intersection(sys.modules)
+assert not loaded, f"heavy dependencies loaded: {sorted(loaded)}"
+print(f"{time.perf_counter() - started:.4f}")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code], check=True, capture_output=True, text=True
     )
-    with pytest.raises(SystemExit):
-        cli.main_embed(args)
+    elapsed = float(result.stdout.strip())
+    logger.info("iconoscope.cli import: %ss", elapsed)
+    assert elapsed < MAX_CLI_IMPORT_SECONDS, (
+        f"iconoscope.cli import took {elapsed:.4f}s; "
+        f"expected under {MAX_CLI_IMPORT_SECONDS:.1f}s"
+    )
 
 
 ## custom size type for argparse to support specifying size as wxh

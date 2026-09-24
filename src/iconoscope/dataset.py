@@ -121,45 +121,68 @@ class ImageDataset(IterableDataset):
     ## storage functionality
 
     def save_features(self, df: pl.DataFrame, model_name: str) -> None:
-        # handle save/update
+        """Save image features for the specified model; supports updating HDF5 without overwriting
+        existing data, e.g. features from other models.
+        """
+        expected_columns = {"image_path", "features"}
+        missing_columns = expected_columns - set(df.columns)
+        if missing_columns:
+            raise ValueError(
+                f"Missing required columns: {', '.join(sorted(missing_columns))}"
+            )
+        unsupported_columns = set(df.columns) - expected_columns
+        if unsupported_columns:
+            raise ValueError(
+                f"unsupported columns: {', '.join(sorted(unsupported_columns))}"
+            )
 
-        # check in post init?
-        # if outfile.exists():
-        # print(f"warning: {outfile} already exists")
-        # check expected columns in dataframe?
-        # TODO: handle updating existing file more carefully
+        image_paths = df["image_path"].to_numpy()
+        features = df["features"].to_numpy()
+        if features.ndim != 2:
+            raise ValueError("features must be 2-dimensional")
 
-        #  validation / checks:
-        # - required/expected columns
-        with h5py.File(self.storage_path, "w") as f:
-            # create a group for image information
-            img_grp = f.create_group("image")
+        # open as append so we can update without overwriting
+        with h5py.File(self.storage_path, "a") as f:
+            # get group for image information; create it if needed
+            img_grp = f.require_group("image")
 
-            # save image directory when first creating dataset
+            # Image paths are shared across models and must match feature vectors.
+            # Check that saved images match the current set before making any updates.
+            # TODO: update this once we split out dataset creation from embed
+            if "paths" in img_grp:
+                stored_paths_dataset = img_grp["paths"]
+                if stored_paths_dataset.size != df.height:
+                    raise ValueError(
+                        "image paths and features must have the same row count as "
+                        "the existing dataset"
+                    )
+                stored_paths = stored_paths_dataset[:]
+                stored_paths = [
+                    path.decode() if isinstance(path, bytes) else str(path)
+                    for path in stored_paths
+                ]
+                requested_paths = [str(path) for path in image_paths]
+                if stored_paths != requested_paths:
+                    raise ValueError("image paths do not match the existing dataset")
+
+            # Currently does not support overwriting features for a model
+            # that has already been saved to this file.
+            # May add an option to overwite in future, but for now this is an error.
+            models_grp = img_grp.get("models")
+            if models_grp is not None and model_name in models_grp:
+                raise ValueError(f"model '{model_name}' already exists")
+
+            # Save shared metadata and create the new model only after validation.
             # TODO: also save max if specified and extensions if not default
             if self.image_dir is not None:
-                # convert path to string
                 img_grp.attrs["image_dir"] = str(self.image_dir)
-
-            # save image paths as one dataset
-            img_grp.create_dataset(
-                "paths", data=df["image_path"].to_numpy(), compression="gzip"
-            )
-            # for each model, create a group to gather related/downstream information
-            model_grp = img_grp.create_group(f"models/{model_name}")
+            if "paths" not in img_grp:
+                img_grp.create_dataset("paths", data=image_paths, compression="gzip")
+            models_grp = img_grp.require_group("models")
+            model_grp = models_grp.create_group(model_name)
             # save extracted features as a dataset
-            model_grp.create_dataset(
-                "features", data=df["features"].to_numpy(), compression="gzip"
-            )
-            # img_grp.attrs["last_modified"] = datetime.now().isoformat()
-            # create a features dataset by model name
-            # NOTE: support storing umap + clusters, and keep model feature derivatives together
-            # seems easiest to store each column as a dataset
-
-            # TODO: save umap for associated model/features
-            remainder_cols = set(df.columns) - {"image_path", "features"}
-            if remainder_cols:
-                print("Warning: unsaved columns (%s)" % ",".join(remainder_cols))
+            model_grp.create_dataset("features", data=features, compression="gzip")
+            # img_grp.attrs["last_modified"] = datetime.now().isoformat()  # needed/useful?
 
     def save_clusters(
         self, labels: np.ndarray, n_clusters: int, model_name: str
