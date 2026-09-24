@@ -121,7 +121,9 @@ class ImageDataset(IterableDataset):
     ## storage functionality
 
     def save_features(self, df: pl.DataFrame, model_name: str) -> None:
-        """Save features for a model without replacing unrelated HDF5 data."""
+        """Save image features for the specified model; supports updating HDF5 without overwriting
+        existing data, e.g. features from other models.
+        """
         expected_columns = {"image_path", "features"}
         missing_columns = expected_columns - set(df.columns)
         if missing_columns:
@@ -144,8 +146,9 @@ class ImageDataset(IterableDataset):
             # get group for image information; create it if needed
             img_grp = f.require_group("image")
 
-            # Existing paths are shared by every model and must not change
-            # between saves. Validate them before mutating the file.
+            # Image paths are shared across models and must match feature vectors.
+            # Check that saved images match the current set before making any updates.
+            # TODO: update this once we split out dataset creation from embed
             if "paths" in img_grp:
                 stored_paths_dataset = img_grp["paths"]
                 if stored_paths_dataset.size != df.height:
@@ -162,9 +165,9 @@ class ImageDataset(IterableDataset):
                 if stored_paths != requested_paths:
                     raise ValueError("image paths do not match the existing dataset")
 
-            # A same-model save is rejected so its derived data cannot become stale
-            # accidentally. A caller can choose a new model name or remove the model
-            # explicitly before saving.
+            # Currently does not support overwriting features for a model
+            # that has already been saved to this file.
+            # May add an option to overwite in future, but for now this is an error.
             models_grp = img_grp.get("models")
             if models_grp is not None and model_name in models_grp:
                 raise ValueError(f"model '{model_name}' already exists")
@@ -174,15 +177,11 @@ class ImageDataset(IterableDataset):
             if self.image_dir is not None:
                 img_grp.attrs["image_dir"] = str(self.image_dir)
             if "paths" not in img_grp:
-                img_grp.create_dataset(
-                    "paths", data=image_paths, compression="gzip"
-                )
+                img_grp.create_dataset("paths", data=image_paths, compression="gzip")
             models_grp = img_grp.require_group("models")
             model_grp = models_grp.create_group(model_name)
             # save extracted features as a dataset
-            model_grp.create_dataset(
-                "features", data=features, compression="gzip"
-            )
+            model_grp.create_dataset("features", data=features, compression="gzip")
             # img_grp.attrs["last_modified"] = datetime.now().isoformat()  # needed/useful?
 
     def save_clusters(
