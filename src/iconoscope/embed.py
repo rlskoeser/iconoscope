@@ -40,7 +40,7 @@ def extract_img_features(img_dataset: ImageDataset) -> pl.DataFrame:
     # hf chat agent suggestion for ViT-Base with 224×224 images:
     # 8 GB -> 8–16; 16 GB -> 32–64; 24 GB -> 64–128; 40+ GB -> 128–256+
 
-    progbar = tqdm(desc="Extracting features")
+    progbar = tqdm(desc="Extracting features", total=img_dataset.image_count)
     for images, paths in dataloader:
         inputs = processor(images, return_tensors="pt").to(device)
         with torch.no_grad():
