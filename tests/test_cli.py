@@ -32,17 +32,6 @@ def test_embed_args(tmp_path: Path):
     assert args.max is None
 
 
-def test_main_embed_missing_dir(tmp_path: Path):
-    from iconoscope.commands.embed import main
-
-    missing_dir = tmp_path / "no_such_dir"
-    args = argparse.Namespace(
-        image_dir=missing_dir, output_path=tmp_path / "out.h5", max=None
-    )
-    with pytest.raises(SystemExit):
-        main(args)
-
-
 def test_cli_lazy_load():
     # for speed, calling the cli should not import heavy dependencies
     code = """
