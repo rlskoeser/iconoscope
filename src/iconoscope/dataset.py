@@ -121,19 +121,19 @@ class ImageDataset(IterableDataset):
     ## storage functionality
 
     def save_features(self, df: pl.DataFrame, model_name: str) -> None:
-        # handle save/update
-
-        # check in post init?
-        # if outfile.exists():
-        # print(f"warning: {outfile} already exists")
-        # check expected columns in dataframe?
-        # TODO: handle updating existing file more carefully
-
+        # save image model features to dataset file
+        #
+        # TODO
         #  validation / checks:
         # - required/expected columns
-        with h5py.File(self.storage_path, "w") as f:
-            # create a group for image information
-            img_grp = f.create_group("image")
+
+        # open as append so we can update without overwriting
+        with h5py.File(self.storage_path, "a") as f:
+            # get group for image information; create group if it doesn't already exist
+            try:
+                img_grp = f["image"]
+            except KeyError:
+                img_grp = f.create_group("image")
 
             # save image directory when first creating dataset
             # TODO: also save max if specified and extensions if not default
@@ -141,22 +141,20 @@ class ImageDataset(IterableDataset):
                 # convert path to string
                 img_grp.attrs["image_dir"] = str(self.image_dir)
 
-            # save image paths as one dataset
-            img_grp.create_dataset(
-                "paths", data=df["image_path"].to_numpy(), compression="gzip"
-            )
+            # save image paths as a dataset if not already saved
+            if "paths" not in img_grp:
+                img_grp.create_dataset(
+                    "paths", data=df["image_path"].to_numpy(), compression="gzip"
+                )
             # for each model, create a group to gather related/downstream information
             model_grp = img_grp.create_group(f"models/{model_name}")
             # save extracted features as a dataset
             model_grp.create_dataset(
                 "features", data=df["features"].to_numpy(), compression="gzip"
             )
-            # img_grp.attrs["last_modified"] = datetime.now().isoformat()
-            # create a features dataset by model name
-            # NOTE: support storing umap + clusters, and keep model feature derivatives together
-            # seems easiest to store each column as a dataset
+            # img_grp.attrs["last_modified"] = datetime.now().isoformat()  # needed/useful?
 
-            # TODO: save umap for associated model/features
+            # check and report if the dataframe has unexpected columns that are not persisted
             remainder_cols = set(df.columns) - {"image_path", "features"}
             if remainder_cols:
                 print("Warning: unsaved columns (%s)" % ",".join(remainder_cols))
