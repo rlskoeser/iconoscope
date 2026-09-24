@@ -60,6 +60,22 @@ def test_create_args(tmp_path: Path):
     assert args.output_path == out
 
 
+def test_create_existing_dataset_does_not_import_handler(tmp_path: Path):
+    out = tmp_path / "data.h5"
+    out.touch()
+    with (
+        patch("iconoscope.cli.import_module") as importer,
+        patch(
+            "sys.argv",
+            ["iconoscope", "create", str(tmp_path), str(out)],
+        ),
+        pytest.raises(SystemExit),
+    ):
+        cli.main()
+
+    importer.assert_not_called()
+
+
 def test_create_reports_image_total(tmp_path: Path, capsys):
     out = tmp_path / "data.h5"
     from iconoscope.commands import create as create_command
