@@ -46,15 +46,23 @@ def _patch_ml(processor, model):
     )
 
 
+def _persisted_dataset(tmp_image_dir: Path) -> ImageDataset:
+    return ImageDataset.create(tmp_image_dir, tmp_image_dir / "a.h5")
+
+
 def test_extract_returns_features(tmp_image_dir: Path):
     processor, model = _fake_processor_and_model()
 
     patches = _patch_ml(processor, model)
-    with patches[0], patches[1], patches[2]:
-        df = embed.extract_img_features(
-            ImageDataset(image_dir=tmp_image_dir, storage_path=tmp_image_dir / "a.h5")
-        )
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patch.object(embed, "tqdm") as progress,
+    ):
+        df = embed.extract_img_features(_persisted_dataset(tmp_image_dir))
 
+    progress.assert_called_once_with(desc="Extracting features", total=3)
     assert df.height == 3
     assert df.columns == ["image_path", "features"]
     assert df["features"].dtype.size == 768
@@ -72,9 +80,7 @@ def test_extract_uses_accelerator_device(tmp_image_dir: Path):
         ),
         patch.object(embed.AutoModel, "from_pretrained", return_value=model),
     ):
-        embed.extract_img_features(
-            ImageDataset(image_dir=tmp_image_dir, storage_path=tmp_image_dir / "a.h5")
-        )
+        embed.extract_img_features(_persisted_dataset(tmp_image_dir))
 
     # model was moved onto the accelerator device
     assert model.device == "meta-device"
@@ -83,9 +89,7 @@ def test_extract_uses_accelerator_device(tmp_image_dir: Path):
 def test_extract_image_paths_match(tmp_image_dir: Path):
     processor, model = _fake_processor_and_model()
 
-    img_dataset = ImageDataset(
-        image_dir=tmp_image_dir, storage_path=tmp_image_dir / "a.h5"
-    )
+    img_dataset = _persisted_dataset(tmp_image_dir)
 
     patches = _patch_ml(processor, model)
     with patches[0], patches[1], patches[2]:

@@ -144,6 +144,12 @@ class ImageDataset(IterableDataset):
             # print("finding images on disk")
             yield from find_images(self.image_dir, max=self.max_images)
 
+    @property
+    def image_count(self) -> int:
+        """Return the number of paths in the persisted inventory."""
+        with h5py.File(self.storage_path, "r") as h5_file:
+            return h5_file["image/paths"].size
+
     ## iterable dataset logic
 
     def __iter__(self) -> Iterator[tuple[Image.Image, str]]:
@@ -247,13 +253,13 @@ class ImageDataset(IterableDataset):
             cluster_ds.attrs["n_clusters"] = n_clusters
 
     def info(self) -> dict:
+        image_count = self.image_count
         with h5py.File(self.storage_path, "r") as f:
             img_grp = f["image"]
             orig_img_dir = img_grp.attrs.get("image_dir")
 
-            img_dataset = img_grp["paths"]
             info = {
-                "image_paths": img_dataset.size,
+                "image_paths": image_count,
                 "image_dir": orig_img_dir,
                 "models": {},
             }
