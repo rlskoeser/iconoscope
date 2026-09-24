@@ -33,7 +33,16 @@ To generate embeddings for local images, specify the path to a directory contain
 iconoscope embed path/to/images/ my_collection.h5
 ```
 
-iconoscope will search for image files anywhere within the specified image directory, with supported image extensions (currently .jpg, .jpeg, .png, .tiff). Image features will be extracted with a pre-trained image model (currently DINOv2) and saved to the specified output (currently HDF5 only).
+iconoscope will search for image files anywhere within the specified image directory. Supported image extensions are:
+
+- `.jpg`
+- `.jpeg`
+- `.png`
+- `.tiff`
+- `.webp`
+- `.avif`
+
+Image features will be extracted with a pre-trained image model (currently DINOv2) and saved to the specified output (currently HDF5 only).
 
 ### mosaic
 
