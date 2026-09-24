@@ -1,4 +1,5 @@
 import argparse
+import logging
 import subprocess
 import sys
 import time
@@ -8,6 +9,8 @@ from unittest.mock import patch
 import pytest
 
 from iconoscope import cli
+
+logger = logging.getLogger(__name__)
 
 
 @patch("iconoscope.commands.embed.ImageDataset")
@@ -51,7 +54,7 @@ print(f"{time.perf_counter() - started:.4f}")
     result = subprocess.run(
         [sys.executable, "-c", code], check=True, capture_output=True, text=True
     )
-    print(f"iconoscope.cli import: {result.stdout.strip()}s")
+    logger.info("iconoscope.cli import: %ss", result.stdout.strip())
 
 
 ## custom size type for argparse to support specifying size as wxh
