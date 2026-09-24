@@ -25,6 +25,13 @@ def existing_directory(value: str) -> Path:
     return path
 
 
+def new_file(value: str) -> Path:
+    path = Path(value)
+    if path.exists():
+        raise argparse.ArgumentTypeError(f"{path} already exists")
+    return path
+
+
 HANDLERS = {
     "create": ("iconoscope.commands.create", "main"),
     "embed": ("iconoscope.commands.embed", "main"),
@@ -52,7 +59,9 @@ def main():
         help="Directory containing images to inventory (can be nested)",
     )
     parser_create.add_argument(
-        "output_path", type=Path, help="File path for the image dataset (.hdf5)"
+        "output_path",
+        type=new_file,
+        help="File path for the image dataset (.hdf5)",
     )
     parser_create.add_argument(
         "-m", "--max", type=int, help="Limit to specified number of images"
