@@ -1,4 +1,6 @@
 import argparse
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -7,8 +9,8 @@ import pytest
 from iconoscope import cli
 
 
-@patch("iconoscope.cli.ImageDataset")
-@patch("iconoscope.cli.extract_img_features")
+@patch("iconoscope.commands.embed.ImageDataset")
+@patch("iconoscope.commands.embed.extract_img_features")
 def test_embed_args(mock_extract_features, mock_img_dataset, tmp_path: Path):
     # test cli args are passed correctly for embed function
     out = tmp_path / "out.h5"
@@ -30,7 +32,19 @@ def test_main_embed_missing_dir(tmp_path: Path):
         image_dir=missing_dir, output_path=tmp_path / "out.h5", max=None
     )
     with pytest.raises(SystemExit):
-        cli.main_embed(args)
+        cli.dispatch(argparse.Namespace(command="embed", **vars(args)))
+
+
+def test_cli_import_does_not_load_heavy_dependencies():
+    code = """
+import sys
+import iconoscope.cli
+
+heavy = {"torch", "transformers", "umap", "sklearn"}
+loaded = heavy.intersection(sys.modules)
+assert not loaded, f"heavy dependencies loaded: {sorted(loaded)}"
+"""
+    subprocess.run([sys.executable, "-c", code], check=True)
 
 
 ## custom size type for argparse to support specifying size as wxh
