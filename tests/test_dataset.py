@@ -212,7 +212,7 @@ def test_save_features_rejects_different_image_paths(tmp_path: Path):
 
 def test_save_features_rejects_mismatched_feature_rows(tmp_path: Path):
     dataset = _dataset_with_features(tmp_path)
-    with pytest.raises(ValueError, match="row"):
+    with pytest.raises(ValueError, match="existing models"):
         dataset.save_features(
             pl.DataFrame(
                 {
@@ -222,6 +222,25 @@ def test_save_features_rejects_mismatched_feature_rows(tmp_path: Path):
             ),
             "clip",
         )
+
+
+def test_save_features_prunes_invalid_paths_before_first_model(tmp_path: Path):
+    dataset = _dataset_with_features(tmp_path)
+    with h5py.File(dataset.storage_path, "r+") as h5_file:
+        del h5_file["image/models/dinov2"]
+
+    dataset.save_features(
+        pl.DataFrame(
+            {
+                "image_path": ["/images/one.jpg"],
+                "features": np.array([[2.0, 0.0]]),
+            }
+        ),
+        "clip",
+    )
+
+    assert dataset.image_count == 1
+    assert dataset.load_image_paths()["image_path"].to_list() == ["/images/one.jpg"]
 
 
 def test_save_features_rejects_non_2d_features(tmp_path: Path):

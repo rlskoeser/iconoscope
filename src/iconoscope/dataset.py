@@ -204,11 +204,6 @@ class ImageDataset(IterableDataset):
             # TODO: update this once we split out dataset creation from embed
             if "paths" in img_grp:
                 stored_paths_dataset = img_grp["paths"]
-                if stored_paths_dataset.size != df.height:
-                    raise ValueError(
-                        "image paths and features must have the same row count as "
-                        "the existing dataset"
-                    )
                 stored_paths = stored_paths_dataset[:]
                 stored_paths = [
                     path.decode() if isinstance(path, bytes) else str(path)
@@ -216,7 +211,25 @@ class ImageDataset(IterableDataset):
                 ]
                 requested_paths = [str(path) for path in image_paths]
                 if stored_paths != requested_paths:
-                    raise ValueError("image paths do not match the existing dataset")
+                    # Embedding skips files that Pillow cannot read. On the
+                    # first model, prune those paths so future model rows stay
+                    # aligned with the inventory.
+                    stored_iter = iter(stored_paths)
+                    is_subsequence = all(
+                        any(path == requested for path in stored_iter)
+                        for requested in requested_paths
+                    )
+                    if not is_subsequence:
+                        raise ValueError("image paths do not match the existing dataset")
+                    if models_grp := img_grp.get("models"):
+                        if len(models_grp):
+                            raise ValueError(
+                                "cannot prune image paths when existing models are present"
+                            )
+                    del img_grp["paths"]
+                    img_grp.create_dataset(
+                        "paths", data=image_paths, compression="gzip"
+                    )
 
             # Currently does not support overwriting features for a model
             # that has already been saved to this file.
