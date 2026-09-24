@@ -300,8 +300,12 @@ def test_find_images_default_extensions(tmp_path: Path):
     Image.new("RGB", (8, 8)).save(tmp_path / "a.jpg")
     Image.new("RGB", (8, 8)).save(tmp_path / "b.png")
     Image.new("RGB", (8, 8)).save(tmp_path / "c.jpeg")
+    # Discovery only checks suffixes, so these do not need to be decodable
+    # images (which keeps the test independent of optional AVIF support in Pillow).
+    (tmp_path / "d.webp").touch()
+    (tmp_path / "e.avif").touch()
     dataset = find_images(tmp_path)
-    assert len(list(dataset)) == 3
+    assert len(list(dataset)) == 5
 
 
 def test_find_images_extension_case_insensitive(tmp_path: Path):

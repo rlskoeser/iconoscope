@@ -14,7 +14,7 @@ from iconoscope.umap import reduce_features
 logger = logging.getLogger(__name__)
 
 #: default image extensions
-DEFAULT_IMG_EXTENSIONS = {".jpg", ".png", ".jpeg", ".tiff"}
+DEFAULT_IMG_EXTENSIONS = {".jpg", ".png", ".jpeg", ".tiff", ".webp", ".avif"}
 
 # base class for iterable dataset without storage?
 
