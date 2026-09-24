@@ -3,7 +3,8 @@ import logging
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from types import ModuleType
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -12,30 +13,34 @@ from iconoscope import cli
 logger = logging.getLogger(__name__)
 
 
-@patch("iconoscope.commands.embed.ImageDataset")
-@patch("iconoscope.commands.embed.extract_img_features")
-def test_embed_args(mock_extract_features, mock_img_dataset, tmp_path: Path):
-    # test cli args are passed correctly for embed function
+def test_embed_args(tmp_path: Path):
+    # Test parser arguments without importing the embedding stack.
     out = tmp_path / "out.h5"
-    with patch("sys.argv", ["iconoscope", "embed", str(tmp_path), str(out)]):
+    handler = MagicMock()
+    command_module = ModuleType("iconoscope.commands.embed")
+    command_module.main = handler
+    with (
+        patch("iconoscope.cli.import_module", return_value=command_module) as importer,
+        patch("sys.argv", ["iconoscope", "embed", str(tmp_path), str(out)]),
+    ):
         cli.main()
 
-    mock_img_dataset.assert_called_with(
-        storage_path=out, image_dir=tmp_path, max_images=None
-    )
-    mock_extract_features.assert_called_with(mock_img_dataset.return_value)
-    mock_img_dataset.return_value.save_features.assert_called_with(
-        mock_extract_features.return_value, "dinov2"
-    )
+    importer.assert_called_once_with("iconoscope.commands.embed")
+    args = handler.call_args.args[0]
+    assert args.image_dir == tmp_path
+    assert args.output_path == out
+    assert args.max is None
 
 
 def test_main_embed_missing_dir(tmp_path: Path):
+    from iconoscope.commands.embed import main
+
     missing_dir = tmp_path / "no_such_dir"
     args = argparse.Namespace(
         image_dir=missing_dir, output_path=tmp_path / "out.h5", max=None
     )
     with pytest.raises(SystemExit):
-        cli.dispatch(argparse.Namespace(command="embed", **vars(args)))
+        main(args)
 
 
 def test_cli_lazy_load():
