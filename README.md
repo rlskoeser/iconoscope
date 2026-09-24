@@ -52,6 +52,12 @@ them to an existing dataset:
 iconoscope embed my_collection.h5
 ```
 
+If an image becomes unreadable after the inventory is created, embedding
+skips it. When adding the first model, the skipped image is removed from the
+dataset's shared path inventory so paths and feature rows remain aligned. Once
+another model has been saved, skipped images cannot be removed because that
+would invalidate the existing model's rows; embedding reports an error instead.
+
 ### mosaic
 
 To generate an embeddings mosaic image, pass the HDF5 dataset file created by the embed command. First, iconoscope will run UMAP (dimensionality reduction) on the embeddings to generate 2D coordinates for positioning images in the mosaic. The number of columns and rows for the mosaic is determined by the requested output size and the number of images; images are slotted into the grid based on UMAP coordinates, and then resized to fit into a grid cell. The UMAP coordinates are not generated with a predetermined seed, but the results are saved in the HDF5 file, so they can be reused on subsequent runs. To generate a mosaic with all the defaults options, run the mosaic command and specify dataset file:
