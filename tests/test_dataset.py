@@ -48,6 +48,7 @@ def test_create_writes_validated_image_inventory(tmp_path: Path):
     dataset = ImageDataset.create(image_dir, tmp_path / "data.h5")
 
     assert list(dataset.get_image_paths()) == [image_dir / "good.jpg"]
+    assert dataset.image_count == 1
     with h5py.File(tmp_path / "data.h5", "r") as h5_file:
         assert "image/models" in h5_file
         assert h5_file["image/paths"].size == 1
