@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Iterable
 from unittest.mock import patch
 
+import h5py
+import numpy as np
 import polars as pl
 import pytest
 from PIL import Image
@@ -112,6 +114,52 @@ def test_collate_single_item():
     imgs, paths = ImageDataset.collate([(img, "/x.png")])
     assert len(imgs) == 1
     assert paths == ["/x.png"]
+
+
+def test_save_features_preserves_existing_models_and_derived_data(tmp_path: Path):
+    storage_path = tmp_path / "data.h5"
+    image_dir = tmp_path / "images"
+    image_dir.mkdir()
+    dataset = ImageDataset(storage_path=storage_path, image_dir=image_dir)
+    paths = ["/images/one.jpg", "/images/two.jpg"]
+
+    dataset.save_features(
+        pl.DataFrame(
+            {
+                "image_path": paths,
+                "features": np.array([[1.0, 0.0], [0.0, 1.0]]),
+            }
+        ),
+        "dinov2",
+    )
+    with h5py.File(storage_path, "r+") as h5_file:
+        model_group = h5_file["image/models/dinov2"]
+        model_group.create_dataset("umap", data=[[0.1, 0.2], [0.3, 0.4]])
+        cluster = model_group.create_dataset("cluster", data=[0, 1])
+        cluster.attrs["n_clusters"] = 2
+
+    dataset.save_features(
+        pl.DataFrame(
+            {
+                "image_path": paths,
+                "features": np.array([[2.0, 0.0], [0.0, 2.0]]),
+            }
+        ),
+        "clip",
+    )
+
+    with h5py.File(storage_path, "r") as h5_file:
+        assert set(h5_file["image/models"]) == {"dinov2", "clip"}
+        assert h5_file["image/models/dinov2/features"][:].tolist() == [
+            [1.0, 0.0],
+            [0.0, 1.0],
+        ]
+        assert h5_file["image/models/dinov2/umap"][:].tolist() == [
+            [0.1, 0.2],
+            [0.3, 0.4],
+        ]
+        assert h5_file["image/models/dinov2/cluster"][:].tolist() == [0, 1]
+        assert h5_file["image/models/dinov2/cluster"].attrs["n_clusters"] == 2
 
 
 ## test find images utility method
