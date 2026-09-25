@@ -274,7 +274,10 @@ def test_save_features_rejects_unsupported_columns(tmp_path: Path):
 
 def test_save_features_defines_same_model_behavior(tmp_path: Path):
     dataset = _dataset_with_features(tmp_path)
-    with pytest.raises(ValueError, match="model.*already exists"):
+    model_name = "dinov2"
+    with pytest.raises(
+        ValueError, match=f"Features for '{model_name}' are already present"
+    ):
         dataset.save_features(
             pl.DataFrame(
                 {
@@ -282,7 +285,7 @@ def test_save_features_defines_same_model_behavior(tmp_path: Path):
                     "features": np.array([[2.0, 0.0], [0.0, 2.0]]),
                 }
             ),
-            "dinov2",
+            model_name,
         )
 
 

@@ -97,9 +97,7 @@ class ImageDataset(IterableDataset):
             raise ValueError(f"Dataset already exists: {storage_path}")
 
         valid_paths = []
-        for path in find_images(
-            image_dir, extensions=extensions, max=max_images
-        ):
+        for path in find_images(image_dir, extensions=extensions, max=max_images):
             try:
                 with Image.open(path) as image:
                     image.verify()
@@ -114,9 +112,7 @@ class ImageDataset(IterableDataset):
         with h5py.File(storage_path, "w") as h5_file:
             image_group = h5_file.create_group("image")
             image_group.attrs["image_dir"] = str(image_dir)
-            image_group.create_dataset(
-                "paths", data=valid_paths, compression="gzip"
-            )
+            image_group.create_dataset("paths", data=valid_paths, compression="gzip")
             image_group.create_group("models")
 
         return cls(storage_path=storage_path)
@@ -220,7 +216,9 @@ class ImageDataset(IterableDataset):
                         for requested in requested_paths
                     )
                     if not is_subsequence:
-                        raise ValueError("image paths do not match the existing dataset")
+                        raise ValueError(
+                            "image paths do not match the existing dataset"
+                        )
                     if models_grp := img_grp.get("models"):
                         if len(models_grp):
                             raise ValueError(
@@ -233,10 +231,12 @@ class ImageDataset(IterableDataset):
 
             # Currently does not support overwriting features for a model
             # that has already been saved to this file.
-            # May add an option to overwite in future, but for now this is an error.
+            # May add an option to overwrite in future, but for now this is an error.
             models_grp = img_grp.get("models")
             if models_grp is not None and model_name in models_grp:
-                raise ValueError(f"model '{model_name}' already exists")
+                raise ValueError(
+                    f"Features for '{model_name}' are already present, overwrite is not yet supported."
+                )
 
             # Save shared metadata and create the new model only after validation.
             # TODO: also save max if specified and extensions if not default
