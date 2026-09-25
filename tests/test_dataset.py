@@ -289,6 +289,12 @@ def test_save_features_defines_same_model_behavior(tmp_path: Path):
         )
 
 
+def test_has_features(tmp_path: Path):
+    dataset = _dataset_with_features(tmp_path)
+    assert dataset.has_features("dinov2")
+    assert not dataset.has_features("clip")
+
+
 ## test find images utility method
 
 

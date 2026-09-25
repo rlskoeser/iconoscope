@@ -249,6 +249,19 @@ class ImageDataset(IterableDataset):
             # save extracted features as a dataset
             model_grp.create_dataset("features", data=features, compression="gzip")
             # img_grp.attrs["last_modified"] = datetime.now().isoformat()  # needed/useful?
+            #
+
+    def has_features(self, model_name: str) -> bool:
+        if self.storage_path.exists():
+            with h5py.File(self.storage_path, "r") as f:
+                return (
+                    "image" in f
+                    and "models" in f["image"]
+                    and model_name in f["image"]["models"]
+                    and "features" in f["image"]["models"][model_name]
+                )
+
+        return False
 
     def save_clusters(
         self, labels: np.ndarray, n_clusters: int, model_name: str
