@@ -1,12 +1,15 @@
+import logging
+
 import polars as pl
 import torch
 from accelerate import Accelerator
-
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoImageProcessor, AutoModel
-from torch.utils.data import DataLoader
 
 from iconoscope.dataset import ImageDataset
+
+logger = logging.getLogger(__name__)
 
 
 def extract_img_features(img_dataset: ImageDataset) -> pl.DataFrame:
@@ -17,7 +20,7 @@ def extract_img_features(img_dataset: ImageDataset) -> pl.DataFrame:
 
     # autodetect which device to use
     device = Accelerator().device
-    print(f"Using device={device}")
+    logger.info("Using device %s", device)
 
     processor = AutoImageProcessor.from_pretrained("facebook/dinov2-base")
     model = AutoModel.from_pretrained("facebook/dinov2-base").to(device)
@@ -58,5 +61,4 @@ def extract_img_features(img_dataset: ImageDataset) -> pl.DataFrame:
             progbar.update(len(images))
 
     progbar.close()
-    print(f"Successfully extracted features from {img_feature_df.height:,} images")
     return img_feature_df
