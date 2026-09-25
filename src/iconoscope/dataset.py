@@ -254,12 +254,8 @@ class ImageDataset(IterableDataset):
     def has_features(self, model_name: str) -> bool:
         if self.storage_path.exists():
             with h5py.File(self.storage_path, "r") as f:
-                return (
-                    "image" in f
-                    and "models" in f["image"]
-                    and model_name in f["image"]["models"]
-                    and "features" in f["image"]["models"][model_name]
-                )
+                model_group_name = f"image/models/{model_name}"
+                return model_group_name in f and "features" in f[model_group_name]
 
         return False
 
