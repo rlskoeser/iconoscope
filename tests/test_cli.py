@@ -61,6 +61,7 @@ def test_create_args(tmp_path: Path):
 
 
 def test_create_existing_dataset_does_not_import_handler(tmp_path: Path):
+    # bail out early if dataset file already exists
     out = tmp_path / "data.h5"
     out.touch()
     with (
