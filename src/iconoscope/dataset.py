@@ -97,6 +97,7 @@ class ImageDataset(IterableDataset):
             raise ValueError(f"Dataset already exists: {storage_path}")
 
         valid_paths = []
+        image_sizes = []
         for path in find_images(image_dir, extensions=extensions, max=max_images):
             try:
                 with Image.open(path) as image:
@@ -105,6 +106,7 @@ class ImageDataset(IterableDataset):
                 logger.warning("Skipping invalid image %s: %s", path, err)
                 continue
             valid_paths.append(str(path))
+            image_sizes.append(image.size)  # tuple[int] of width,height
 
         if not valid_paths:
             raise ValueError(f"No valid images found in `{image_dir}`")
@@ -112,13 +114,19 @@ class ImageDataset(IterableDataset):
         with h5py.File(storage_path, "w") as h5_file:
             image_group = h5_file.create_group("image")
             image_group.attrs["image_dir"] = str(image_dir)
+            print(valid_paths)
             image_group.create_dataset("paths", data=valid_paths, compression="gzip")
-            image_group.create_group("models")
+            print(image_sizes)
+            print(np.array(image_sizes))
+            image_group.create_dataset(
+                "sizes", data=np.array(image_sizes), compression="gzip"
+            )
 
         return cls(storage_path=storage_path)
 
     def __post_init__(self):
         # when creating a new collection, storage will not exist so image dir is required
+        # TODO: require using create with image dir, only support open existing here?
         if not self.storage_path.exists():
             if self.image_dir is None:
                 raise ValueError(

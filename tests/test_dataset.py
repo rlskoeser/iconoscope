@@ -39,19 +39,18 @@ def test_init_validation(tmp_path):
     assert ImageDataset(storage_path=h5_datafile)
 
 
-def test_create_writes_validated_image_inventory(tmp_path: Path):
-    image_dir = tmp_path / "images"
-    image_dir.mkdir()
-    Image.new("RGB", (8, 8)).save(image_dir / "good.jpg")
-    (image_dir / "broken.jpg").write_text("not an image")
+def test_create_writes_validated_image_inventory(tmp_path: Path, tmp_image_dir: Path):
+    # add a file with an image extension that will not pass verification
+    (tmp_image_dir / "broken.png").write_text("not an image")
 
-    dataset = ImageDataset.create(image_dir, tmp_path / "data.h5")
+    dataset = ImageDataset.create(tmp_image_dir, tmp_path / "data.h5")
 
-    assert list(dataset.get_image_paths()) == [image_dir / "good.jpg"]
-    assert dataset.image_count == 1
+    assert list(dataset.get_image_paths()) == list(tmp_image_dir.glob("*.jpg"))
+    assert dataset.image_count == 3
     with h5py.File(tmp_path / "data.h5", "r") as h5_file:
-        assert "image/models" in h5_file
-        assert h5_file["image/paths"].size == 1
+        assert h5_file["image/paths"].size == 3
+        assert h5_file["image/sizes"].shape == (3, 2)
+        assert "image/models" not in h5_file
 
 
 def test_get_image_paths(tmp_path: Path, tmp_image_dir: Path):
