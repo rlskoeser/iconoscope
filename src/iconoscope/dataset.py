@@ -83,11 +83,11 @@ class ImageDataset(IterableDataset):
         extensions: set[str] | None = None,
         max_images: int | None = None,
     ) -> "ImageDataset":
-        """Create an image inventory without loading an embedding model.
+        """Collect images and create a new image dataset. Does not generate embeddings.
 
-        Discovery remains suffix-based via :func:`find_images`; opening each
-        candidate is the validation step that keeps unusable files out of the
-        persistent inventory.
+        Finds image files within the specified `image_dir` based on extension
+        via :func:`find_images`. Image files are opened and verified to avoid
+        adding broken image files to the dataset.
         """
         image_dir = Path(image_dir)
         storage_path = Path(storage_path)
