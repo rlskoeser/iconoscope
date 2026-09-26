@@ -2,6 +2,7 @@ import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self
 
 import h5py
 import numpy as np
@@ -82,12 +83,12 @@ class ImageDataset(IterableDataset):
         *,
         extensions: set[str] | None = None,
         max_images: int | None = None,
-    ) -> "ImageDataset":
+    ) -> Self:
         """Collect images and create a new image dataset. Does not generate embeddings.
 
         Finds image files within the specified `image_dir` based on extension
         via :func:`find_images`. Image files are opened and verified to avoid
-        adding broken image files to the dataset.
+        adding broken image files to the dataset, and to determine image size.
         """
         image_dir = Path(image_dir)
         storage_path = Path(storage_path)
@@ -102,24 +103,28 @@ class ImageDataset(IterableDataset):
             try:
                 with Image.open(path) as image:
                     image.verify()
+                    valid_paths.append(str(path))
+                    image_sizes.append(image.size)  # tuple[int] of width,height
             except (OSError, SyntaxError) as err:
                 logger.warning("Skipping invalid image %s: %s", path, err)
                 continue
-            valid_paths.append(str(path))
-            image_sizes.append(image.size)  # tuple[int] of width,height
 
         if not valid_paths:
             raise ValueError(f"No valid images found in `{image_dir}`")
 
+        # glob order is indeterminate; load into a dataframe and sort by path before saving
+        df = pl.DataFrame(data={"paths": valid_paths, "sizes": image_sizes}).sort(
+            "paths"
+        )
+
         with h5py.File(storage_path, "w") as h5_file:
             image_group = h5_file.create_group("image")
             image_group.attrs["image_dir"] = str(image_dir)
-            print(valid_paths)
-            image_group.create_dataset("paths", data=valid_paths, compression="gzip")
-            print(image_sizes)
-            print(np.array(image_sizes))
             image_group.create_dataset(
-                "sizes", data=np.array(image_sizes), compression="gzip"
+                "paths", data=df["paths"].to_list(), compression="gzip"
+            )
+            image_group.create_dataset(
+                "sizes", data=df["sizes"].to_list(), compression="gzip"
             )
 
         return cls(storage_path=storage_path)
@@ -142,7 +147,7 @@ class ImageDataset(IterableDataset):
         """Yield a list of image paths either from configured image directory or stored data file"""
         if self.storage_path.exists():
             # print("loading images from storage")  # add logging?
-            for row in self.load_image_paths().iter_rows(named=True):
+            for row in self.get_image_data().iter_rows(named=True):
                 yield Path(row["image_path"])
         elif self.image_dir:
             # print("finding images on disk")
@@ -182,12 +187,15 @@ class ImageDataset(IterableDataset):
         existing data, e.g. features from other models.
         """
         expected_columns = {"image_path", "features"}
+
         missing_columns = expected_columns - set(df.columns)
         if missing_columns:
             raise ValueError(
                 f"Missing required columns: {', '.join(sorted(missing_columns))}"
             )
-        unsupported_columns = set(df.columns) - expected_columns
+        # image size is not required but allowed (since now included in get_image_data)
+        allowed_columns = {"image_size"}
+        unsupported_columns = set(df.columns) - expected_columns - allowed_columns
         if unsupported_columns:
             raise ValueError(
                 f"unsupported columns: {', '.join(sorted(unsupported_columns))}"
@@ -207,35 +215,39 @@ class ImageDataset(IterableDataset):
             # Check that saved images match the current set before making any updates.
             # TODO: update this once we split out dataset creation from embed
             if "paths" in img_grp:
-                stored_paths_dataset = img_grp["paths"]
-                stored_paths = stored_paths_dataset[:]
-                stored_paths = [
-                    path.decode() if isinstance(path, bytes) else str(path)
-                    for path in stored_paths
-                ]
-                requested_paths = [str(path) for path in image_paths]
-                if stored_paths != requested_paths:
-                    # Embedding skips files that Pillow cannot read. On the
-                    # first model, prune those paths so future model rows stay
-                    # aligned with the inventory.
-                    stored_iter = iter(stored_paths)
-                    is_subsequence = all(
-                        any(path == requested for path in stored_iter)
-                        for requested in requested_paths
+                img_df = self.get_image_data()
+                # error if any image paths are in the incoming df but not in the stored image paths
+                unknown_img_df = df.join(img_df, on="image_path", how="anti")
+                if unknown_img_df.height:
+                    raise ValueError(
+                        "image paths do not match the existing dataset (%d unknown paths)",
+                        unknown_img_df.height,
                     )
-                    if not is_subsequence:
+                # check if total does not match
+                if img_df.height != df.height:
+                    # if any features have already been saved, error
+                    has_model_features = len(img_grp.get("models", []))
+                    if has_model_features:
                         raise ValueError(
-                            "image paths do not match the existing dataset"
+                            "cannot prune image paths when existing models are present"
                         )
-                    if models_grp := img_grp.get("models"):
-                        if len(models_grp):
-                            raise ValueError(
-                                "cannot prune image paths when existing models are present"
-                            )
-                    del img_grp["paths"]
-                    img_grp.create_dataset(
-                        "paths", data=image_paths, compression="gzip"
-                    )
+                    else:
+                        # otherwise, prune invalid image paths and their corresponding sizes
+                        img_subset_df = df.join(img_df, on="image_path", how="left")
+                        # can't resize, so delete and recreate
+                        # TODO: move this somewhere shared?
+                        del img_grp["paths"]
+                        del img_grp["sizes"]
+                        img_grp.create_dataset(
+                            "paths",
+                            data=img_subset_df["image_path"].to_list(),
+                            compression="gzip",
+                        )
+                        img_grp.create_dataset(
+                            "sizes",
+                            data=img_subset_df["image_size"].to_list(),
+                            compression="gzip",
+                        )
 
             # Currently does not support overwriting features for a model
             # that has already been saved to this file.
@@ -314,7 +326,7 @@ class ImageDataset(IterableDataset):
                 info["models"][model] = model_data
             return info
 
-    def load_image_paths(self) -> pl.DataFrame:
+    def get_image_data(self) -> pl.DataFrame:
         return self.load_data()  # images paths only by default
 
     def load_data(
@@ -331,9 +343,12 @@ class ImageDataset(IterableDataset):
             img_grp = f["image"]
             data = {}
             if paths:
-                img_dataset = img_grp["paths"]
+                img_dataset = f["image/paths"]
+                img_sizes = f["image/sizes"]
                 # load image paths as string instead of binary string
                 data["image_path"] = img_dataset[:].astype("T")[:]
+                # return image sizes as well
+                data["image_size"] = img_sizes[:]
 
             if features or umap:
                 # if umap is requested but has not yet been generated, calculate and save

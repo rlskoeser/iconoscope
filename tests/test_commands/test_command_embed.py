@@ -15,7 +15,7 @@ def test_embed_existing_model_features_bail_out(
     # bail out early if requested features already present in the dataset file
     h5_file = tmp_image_dir / "img_dataset.h5"
     img_ds = ImageDataset.create(tmp_image_dir, h5_file)
-    img_df = img_ds.load_image_paths()
+    img_df = img_ds.get_image_data()
     df = img_df.with_columns(features=np.zeros((img_df.height, 4)))
     mock_extract_features.return_value = df
     embed.main(argparse.Namespace(dataset=h5_file))

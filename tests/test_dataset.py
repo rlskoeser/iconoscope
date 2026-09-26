@@ -42,10 +42,9 @@ def test_init_validation(tmp_path):
 def test_create_writes_validated_image_inventory(tmp_path: Path, tmp_image_dir: Path):
     # add a file with an image extension that will not pass verification
     (tmp_image_dir / "broken.png").write_text("not an image")
-
     dataset = ImageDataset.create(tmp_image_dir, tmp_path / "data.h5")
 
-    assert list(dataset.get_image_paths()) == list(tmp_image_dir.glob("*.jpg"))
+    assert list(dataset.get_image_paths()) == sorted(list(tmp_image_dir.glob("*.jpg")))
     assert dataset.image_count == 3
     with h5py.File(tmp_path / "data.h5", "r") as h5_file:
         assert h5_file["image/paths"].size == 3
@@ -53,14 +52,27 @@ def test_create_writes_validated_image_inventory(tmp_path: Path, tmp_image_dir: 
         assert "image/models" not in h5_file
 
 
+def test_get_image_data(tmp_path: Path, tmp_image_dir: Path):
+    # when storage file doesn't exist, yields results from find image method
+    h5_datafile = tmp_path / "data.h5"
+    img_ds = ImageDataset.create(image_dir=tmp_image_dir, storage_path=h5_datafile)
+    img_df = img_ds.get_image_data()
+    assert img_df.columns == ["image_path", "image_size"]
+    assert img_df["image_path"].to_list() == sorted(
+        list([str(p) for p in tmp_image_dir.glob("*jpg")])
+    )
+    # fixture images are 32x24
+    assert img_df["image_size"].to_list() == [[32, 24]] * 3
+
+
 def test_get_image_paths(tmp_path: Path, tmp_image_dir: Path):
     # when storage file doesn't exist, yields results from find image method
     h5_datafile = tmp_path / "data.h5"
     img_ds = ImageDataset(image_dir=tmp_image_dir, storage_path=h5_datafile)
-    with patch.object(img_ds, "load_image_paths") as mock_load_img_paths:
+    with patch.object(img_ds, "get_image_data") as mock_get_image_data:
         img_paths = img_ds.get_image_paths()
         # should not load from data when storage file doesn't exist
-        mock_load_img_paths.assert_not_called()
+        mock_get_image_data.assert_not_called()
         assert isinstance(img_paths, Iterable)
         img_paths = list(img_paths)
         assert len(img_paths) == 3  # 3 in fixture
@@ -71,10 +83,10 @@ def test_get_image_paths(tmp_path: Path, tmp_image_dir: Path):
         h5_datafile.touch()
         test_image_paths = ["foobar_a.jpg", "b.jpg"]
         img_df = pl.DataFrame(data={"image_path": test_image_paths})
-        mock_load_img_paths.return_value = img_df
+        mock_get_image_data.return_value = img_df
         img_paths = img_ds.get_image_paths()
         # call count assertion fails, but mock data is working
-        # assert mock_load_img_paths.call_count == 1
+        # assert mock_get_image_data.call_count == 1
         assert isinstance(img_paths, Iterable)
         img_paths = list(img_paths)
         assert len(img_paths) == len(test_image_paths)
@@ -105,11 +117,11 @@ def test_iter_err(tmp_path: Path, tmp_image_dir: Path, caplog):
     # add a non-image file with an image extension
     bad_img = tmp_image_dir / "bogus.png"
     bad_img.write_text("this is not an image")
-    img_ds = ImageDataset(image_dir=tmp_image_dir, storage_path=h5_datafile)
+    img_ds = ImageDataset.create(image_dir=tmp_image_dir, storage_path=h5_datafile)
     images = list(img_ds.__iter__())
     assert len(images) == 3  # should return all fixtures but nothing else
     assert len(caplog.record_tuples) == 1
-    assert "Error loading" in caplog.text  # warns about the problem
+    assert "Skipping invalid image" in caplog.text  # warns about the problem
 
 
 def test_collate_returns_lists():
@@ -130,12 +142,14 @@ def test_collate_single_item():
     assert paths == ["/x.png"]
 
 
-def test_save_features_preserves_existing_models_and_derived_data(tmp_path: Path):
+def test_save_features_preserves_existing_data(tmp_path: Path, tmp_image_dir: Path):
     storage_path = tmp_path / "data.h5"
     image_dir = tmp_path / "images"
     image_dir.mkdir()
-    dataset = ImageDataset(storage_path=storage_path, image_dir=image_dir)
-    paths = ["/images/one.jpg", "/images/two.jpg"]
+    dataset = ImageDataset.create(
+        storage_path=storage_path, image_dir=tmp_image_dir, max_images=2
+    )
+    paths = sorted(list([str(p) for p in tmp_image_dir.glob("*.jpg")]))[:2]
 
     dataset.save_features(
         pl.DataFrame(
@@ -176,31 +190,16 @@ def test_save_features_preserves_existing_models_and_derived_data(tmp_path: Path
         assert h5_file["image/models/dinov2/cluster"].attrs["n_clusters"] == 2
 
 
-def _dataset_with_features(tmp_path: Path) -> ImageDataset:
-    image_dir = tmp_path / "images"
-    image_dir.mkdir()
-    dataset = ImageDataset(
-        storage_path=tmp_path / "data.h5",
-        image_dir=image_dir,
-    )
-    dataset.save_features(
-        pl.DataFrame(
-            {
-                "image_path": ["/images/one.jpg", "/images/two.jpg"],
-                "features": np.array([[1.0, 0.0], [0.0, 1.0]]),
-            }
-        ),
-        "dinov2",
-    )
-    return dataset
-
-
-def test_save_features_rejects_different_image_paths(tmp_path: Path):
-    dataset = _dataset_with_features(tmp_path)
+def test_save_features_rejects_different_image_paths(
+    tmp_path: Path, tmp_image_dir: Path
+):
+    h5_file = tmp_path / "data.h5"
+    dataset = ImageDataset.create(image_dir=tmp_image_dir, storage_path=h5_file)
     with pytest.raises(ValueError, match="image paths"):
         dataset.save_features(
             pl.DataFrame(
                 {
+                    # image paths don't match what is in tmp_image_dir
                     "image_path": ["/images/one.jpg", "/images/other.jpg"],
                     "features": np.array([[2.0, 0.0], [0.0, 2.0]]),
                 }
@@ -209,13 +208,29 @@ def test_save_features_rejects_different_image_paths(tmp_path: Path):
         )
 
 
-def test_save_features_rejects_mismatched_feature_rows(tmp_path: Path):
-    dataset = _dataset_with_features(tmp_path)
-    with pytest.raises(ValueError, match="existing models"):
+def test_save_features_rejects_mismatched_feature_rows(
+    tmp_path: Path, tmp_image_dir: Path
+):
+    h5_file = tmp_path / "data.h5"
+    dataset = ImageDataset.create(image_dir=tmp_image_dir, storage_path=h5_file)
+    image_paths = sorted(list([str(p) for p in tmp_image_dir.glob("*.jpg")]))
+    dataset.save_features(
+        pl.DataFrame(
+            {
+                "image_path": image_paths,
+                "features": np.array([[1.0, 0.0], [0.0, 1.0], [0.0, 0.5]]),
+            }
+        ),
+        "dinov2",
+    )
+    with pytest.raises(
+        ValueError, match="cannot prune image paths when existing models are present"
+    ):
         dataset.save_features(
             pl.DataFrame(
                 {
-                    "image_path": ["/images/one.jpg"],
+                    # subset of valid paths but image paths can't be pruned once features are saved
+                    "image_path": image_paths[:1],
                     "features": np.array([[2.0, 0.0]]),
                 }
             ),
@@ -223,15 +238,17 @@ def test_save_features_rejects_mismatched_feature_rows(tmp_path: Path):
         )
 
 
-def test_save_features_prunes_invalid_paths_before_first_model(tmp_path: Path):
-    dataset = _dataset_with_features(tmp_path)
-    with h5py.File(dataset.storage_path, "r+") as h5_file:
-        del h5_file["image/models/dinov2"]
+def test_save_features_rm_invalid_paths_on_first_model(
+    tmp_path: Path, tmp_image_dir: Path
+):
+    h5_file = tmp_path / "data.h5"
+    dataset = ImageDataset.create(image_dir=tmp_image_dir, storage_path=h5_file)
+    image_paths = sorted(list([str(p) for p in tmp_image_dir.glob("*.jpg")]))
 
     dataset.save_features(
         pl.DataFrame(
             {
-                "image_path": ["/images/one.jpg"],
+                "image_path": [image_paths[0]],
                 "features": np.array([[2.0, 0.0]]),
             }
         ),
@@ -239,11 +256,13 @@ def test_save_features_prunes_invalid_paths_before_first_model(tmp_path: Path):
     )
 
     assert dataset.image_count == 1
-    assert dataset.load_image_paths()["image_path"].to_list() == ["/images/one.jpg"]
+    assert dataset.get_image_data()["image_path"].to_list() == [image_paths[0]]
 
 
-def test_save_features_rejects_non_2d_features(tmp_path: Path):
-    dataset = _dataset_with_features(tmp_path)
+def test_save_features_rejects_non_2d_features(tmp_path: Path, tmp_image_dir: Path):
+    dataset = ImageDataset.create(
+        image_dir=tmp_image_dir, storage_path=tmp_image_dir / "data.h5"
+    )
     with pytest.raises(ValueError, match="2-dimensional"):
         dataset.save_features(
             pl.DataFrame(
@@ -256,13 +275,16 @@ def test_save_features_rejects_non_2d_features(tmp_path: Path):
         )
 
 
-def test_save_features_rejects_unsupported_columns(tmp_path: Path):
-    dataset = _dataset_with_features(tmp_path)
+def test_save_features_rejects_unsupported_columns(tmp_path: Path, tmp_image_dir: Path):
+    dataset = ImageDataset.create(
+        image_dir=tmp_image_dir, storage_path=tmp_image_dir / "data.h5", max_images=2
+    )
+    image_paths = sorted(list([str(p) for p in tmp_image_dir.glob("*.jpg")]))[:2]
     with pytest.raises(ValueError, match="unsupported"):
         dataset.save_features(
             pl.DataFrame(
                 {
-                    "image_path": ["/images/one.jpg", "/images/two.jpg"],
+                    "image_path": image_paths,
                     "features": np.array([[2.0, 0.0], [0.0, 2.0]]),
                     "label": ["a", "b"],
                 }
@@ -271,26 +293,43 @@ def test_save_features_rejects_unsupported_columns(tmp_path: Path):
         )
 
 
-def test_save_features_defines_same_model_behavior(tmp_path: Path):
-    dataset = _dataset_with_features(tmp_path)
+def test_save_features_no_overwrite(tmp_path: Path, tmp_image_dir: Path):
+    dataset = ImageDataset.create(
+        image_dir=tmp_image_dir, storage_path=tmp_image_dir / "data.h5", max_images=2
+    )
+    image_paths = sorted(list([str(p) for p in tmp_image_dir.glob("*.jpg")]))[:2]
+    feature_df = pl.DataFrame(
+        {
+            "image_path": image_paths,
+            "features": np.array([[2.0, 0.0], [0.0, 2.0]]),
+        }
+    )
+
     model_name = "dinov2"
+    dataset.save_features(feature_df, model_name)
+
     with pytest.raises(
         ValueError, match=f"Features for '{model_name}' are already present"
     ):
-        dataset.save_features(
-            pl.DataFrame(
-                {
-                    "image_path": ["/images/one.jpg", "/images/two.jpg"],
-                    "features": np.array([[2.0, 0.0], [0.0, 2.0]]),
-                }
-            ),
-            model_name,
-        )
+        # rejects on second time
+        dataset.save_features(feature_df, model_name)
 
 
-def test_has_features(tmp_path: Path):
-    dataset = _dataset_with_features(tmp_path)
-    assert dataset.has_features("dinov2")
+def test_has_features(tmp_path: Path, tmp_image_dir: Path):
+    dataset = ImageDataset.create(
+        image_dir=tmp_image_dir, storage_path=tmp_image_dir / "data.h5", max_images=2
+    )
+    image_paths = sorted(list([str(p) for p in tmp_image_dir.glob("*.jpg")]))[:2]
+    feature_df = pl.DataFrame(
+        {
+            "image_path": image_paths,
+            "features": np.array([[2.0, 0.0], [0.0, 2.0]]),
+        }
+    )
+    model_name = "dinov2"
+    assert not dataset.has_features(model_name)
+    dataset.save_features(feature_df, model_name)
+    assert dataset.has_features(model_name)
     assert not dataset.has_features("clip")
 
 
