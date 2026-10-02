@@ -131,7 +131,7 @@ class ImageDataset(IterableDataset):
 
     def __post_init__(self):
         # when creating a new collection, storage will not exist so image dir is required
-        # TODO: require using create with image dir, only support open existing here?
+        # TODO: require create with image dir, and only open existing storage in init method
         if not self.storage_path.exists():
             if self.image_dir is None:
                 raise ValueError(
@@ -145,8 +145,8 @@ class ImageDataset(IterableDataset):
 
     def get_image_paths(self) -> Iterator[Path]:
         """Yield a list of image paths either from configured image directory or stored data file"""
+        # TODO: simplify when we update init to storage only
         if self.storage_path.exists():
-            # print("loading images from storage")  # add logging?
             for row in self.get_image_data().iter_rows(named=True):
                 yield Path(row["image_path"])
         elif self.image_dir:
@@ -300,30 +300,39 @@ class ImageDataset(IterableDataset):
             img_grp = f["image"]
             orig_img_dir = img_grp.attrs.get("image_dir")
 
+            img_df = self.get_image_data().with_columns(
+                aspect_ratio=pl.col.image_size.arr.first().truediv(
+                    pl.col.image_size.arr.last()
+                )
+            )
+
             info = {
                 "image_paths": image_count,
                 "image_dir": orig_img_dir,
+                "image_size_mode": img_df["image_size"].mode().to_list()[0],
+                "image_aspect_mode": img_df["aspect_ratio"].mode().to_list()[0],
                 "models": {},
             }
-            all_models_grp = img_grp["models"]
-            for model in all_models_grp.keys():
-                model_grp = all_models_grp[model]
-                model_data = {}
-                if "features" in model_grp:
-                    features = model_grp["features"]
-                    model_data["embeddings"] = features.shape
-                if "umap" in model_grp:
-                    umap = model_grp["umap"]
-                    model_data["umap"] = umap.shape
-                if "cluster" in model_grp:
-                    cluster_ds = model_grp["cluster"]
-                    model_data["cluster"] = {
-                        "k": cluster_ds.attrs.get("n_clusters"),
-                        "size": cluster_ds.size,
-                    }
+            all_models_grp = img_grp.get("models")
+            if all_models_grp:
+                for model in all_models_grp.keys():
+                    model_grp = all_models_grp[model]
+                    model_data = {}
+                    if "features" in model_grp:
+                        features = model_grp["features"]
+                        model_data["embeddings"] = features.shape
+                    if "umap" in model_grp:
+                        umap = model_grp["umap"]
+                        model_data["umap"] = umap.shape
+                    if "cluster" in model_grp:
+                        cluster_ds = model_grp["cluster"]
+                        model_data["cluster"] = {
+                            "k": cluster_ds.attrs.get("n_clusters"),
+                            "size": cluster_ds.size,
+                        }
 
-                # any validation ? check rows?
-                info["models"][model] = model_data
+                    # any validation ? check rows?
+                    info["models"][model] = model_data
             return info
 
     def get_image_data(self) -> pl.DataFrame:

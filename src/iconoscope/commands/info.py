@@ -15,6 +15,16 @@ def main(args: argparse.Namespace) -> None:
     if "image_paths" in details:
         whence = f" from {details['image_dir']}" if details.get("image_dir") else ""
         info_details.append(f"  {details['image_paths']:,} image paths{whence}")
+        if "image_size_mode" in details:
+            info_details.append(
+                f"\tMost frequent image size:  {'x'.join(str(dim) for dim in details['image_size_mode'])}"
+            )
+        if "image_aspect_mode" in details:
+            # todo: might be nice display in width:height format also, based on image mode and gcd
+            # round to nearest ten with round(n, -1); then use math.gcd to reduce to lowest terms for width:height display
+            info_details.append(
+                f"\tMost frequent aspect ratio: {details['image_aspect_mode']:.2f}"
+            )
     else:
         info_details.append(" image_path and features columns not found")
 
