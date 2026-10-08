@@ -193,8 +193,8 @@ class ImageDataset(IterableDataset):
             raise ValueError(
                 f"Missing required columns: {', '.join(sorted(missing_columns))}"
             )
-        # image size is not required but allowed (since now included in get_image_data)
-        allowed_columns = {"image_size"}
+        # image size and aspect ratio are allowed but not required (since now included in get_image_data)
+        allowed_columns = {"image_size", "aspect_ratio"}
         unsupported_columns = set(df.columns) - expected_columns - allowed_columns
         if unsupported_columns:
             raise ValueError(
@@ -404,4 +404,13 @@ class ImageDataset(IterableDataset):
                 # move cluster generation logic to dataset; support cluster/save on demand?
                 # then load as cluster_k{n} in dataframe when requested
 
-            return pl.DataFrame(data=data)
+            df = pl.DataFrame(data=data)
+            # when image size is present, calculate aspect ratio
+            if "image_size" in df.columns:
+                df = df.with_columns(
+                    aspect_ratio=pl.col.image_size.arr.first().truediv(
+                        pl.col.image_size.arr.last()
+                    )
+                )
+
+            return df

@@ -57,12 +57,13 @@ def test_get_image_data(tmp_path: Path, tmp_image_dir: Path):
     h5_datafile = tmp_path / "data.h5"
     img_ds = ImageDataset.create(image_dir=tmp_image_dir, storage_path=h5_datafile)
     img_df = img_ds.get_image_data()
-    assert img_df.columns == ["image_path", "image_size"]
+    assert img_df.columns == ["image_path", "image_size", "aspect_ratio"]
     assert img_df["image_path"].to_list() == sorted(
         list([str(p) for p in tmp_image_dir.glob("*jpg")])
     )
     # fixture images are 32x24
     assert img_df["image_size"].to_list() == [[32, 24]] * 3
+    assert img_df["aspect_ratio"].to_list() == [32 / 24] * 3
 
 
 def test_get_image_paths(tmp_path: Path, tmp_image_dir: Path):
