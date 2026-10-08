@@ -125,16 +125,11 @@ def estimate_columns(image_count, canvas_width, canvas_height, aspect_ratio) -> 
         image_count * w * (w / aspect_ratio)
             = canvas_width * canvas_height
 
-    Expanded, this is a quadratic to solve for thumbnail width w:
-        quad_a * w^2 + quad_b * w  = 0
+    Solving for thumbnail width w:
+        w = sqrt(canvas_width * canvas_height * aspect_ratio / image_count)
     """
     canvas_area = canvas_width * canvas_height
-
-    quad_a = image_count / aspect_ratio
-    quad_b = image_count * canvas_area
-
-    discriminant = 4 * quad_a * quad_b
-    thumb_width = (math.sqrt(discriminant)) / (2 * quad_a)
+    thumb_width = math.sqrt(canvas_area * aspect_ratio / image_count)
 
     return round(canvas_width / thumb_width)
 

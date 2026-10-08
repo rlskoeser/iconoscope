@@ -33,3 +33,41 @@ def test_assign_to_grid_preserves_xy_orientation(
         for row in range(grid_rows)
         for col in range(grid_cols)
     }
+
+
+@pytest.mark.parametrize(
+    "image_count, canvas_width, canvas_height, aspect_ratio, expected_cols",
+    [
+        # square canvas, square thumbnails: 10x10 grid of 100px thumbs
+        (100, 1000, 1000, 1.0, 10),
+        # wide canvas, square thumbnails: 20x10 grid of 100px thumbs
+        (200, 2000, 1000, 1.0, 20),
+        # tall canvas, square thumbnails: 10x20 grid of 100px thumbs
+        (200, 1000, 2000, 1.0, 10),
+        # landscape thumbnails (200x100): 5 cols x 10 rows
+        (50, 1000, 1000, 2.0, 5),
+        # portrait thumbnails (50x100): 20 cols x 10 rows
+        (200, 1000, 1000, 0.5, 20),
+        # single image fills the canvas
+        (1, 1000, 1000, 1.0, 1),
+    ],
+)
+def test_estimate_columns(
+    image_count: int,
+    canvas_width: int,
+    canvas_height: int,
+    aspect_ratio: float,
+    expected_cols: int,
+) -> None:
+    """Total thumbnail area should match canvas area for exact-fit cases."""
+    assert (
+        mosaic.estimate_columns(image_count, canvas_width, canvas_height, aspect_ratio)
+        == expected_cols
+    )
+
+
+def test_estimate_columns_increases_with_image_count() -> None:
+    """More images on the same canvas require more (smaller) columns."""
+    cols = [mosaic.estimate_columns(n, 1000, 1000, 1.0) for n in (10, 100, 1000)]
+    assert cols == sorted(cols)
+    assert cols[0] < cols[-1]
