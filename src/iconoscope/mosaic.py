@@ -3,8 +3,9 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+import tqdm
 from lap import lapjv
-from PIL import Image
+from PIL import Image, ImageOps
 from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
 
@@ -53,7 +54,8 @@ def assign_to_grid(
         # lapjv requires a square cost matrix; if there are more cells than items,
         # add padding items to fill out the grid
         if n_items < n_cells:
-            padding = np.full((n_cells - n_items, 2), 0.5, dtype=np.float32)
+            # put the padding cells at bottom right instead of middle
+            padding = np.full((n_cells - n_items, 2), 1.0, dtype=np.float32)
             square_coords = np.vstack([coords, padding])
         else:
             square_coords = coords[:n_cells]
@@ -109,6 +111,65 @@ MIN_THUMB_SIZE = 20
 MAX_THUMB_SIZE = 350
 
 
+def estimate_columns(image_count, canvas_width, canvas_height, aspect_ratio, gap=0):
+    """
+    Continuous estimate of the best column count.
+
+    aspect_ratio = thumbnail width / thumbnail height.
+    Treats each thumbnail plus one gap as a "pitch" cell and requires the
+    total area of all cells to equal the canvas area (padded by one gap
+    so the n-1 gaps between cells are counted correctly):
+
+        image_count * (w + gap) * (w / aspect_ratio + gap)
+            = (canvas_width + gap) * (canvas_height + gap)
+
+    Expanded, this is a quadratic in thumbnail width w:
+        quad_a * w^2 + quad_b * w + quad_c = 0
+    """
+    padded_canvas_area = (canvas_width + gap) * (canvas_height + gap)
+
+    quad_a = image_count / aspect_ratio
+    quad_b = image_count * gap * (1 + 1 / aspect_ratio)
+    quad_c = image_count * gap**2 - padded_canvas_area
+
+    discriminant = quad_b**2 - 4 * quad_a * quad_c
+    thumb_width = (-quad_b + math.sqrt(discriminant)) / (2 * quad_a)
+
+    return (canvas_width + gap) / (thumb_width + gap)
+
+
+def best_grid(
+    image_count, canvas_width, canvas_height, aspect_ratio, gap=0, search_window=3
+):
+    estimated_cols = round(
+        estimate_columns(image_count, canvas_width, canvas_height, aspect_ratio, gap)
+    )
+
+    best = None
+    first_col = max(1, estimated_cols - search_window)
+    last_col = estimated_cols + search_window
+
+    for cols in range(first_col, last_col + 1):
+        rows = math.ceil(image_count / cols)
+
+        max_cell_width = (canvas_width - (cols - 1) * gap) / cols
+        max_cell_height = (canvas_height - (rows - 1) * gap) / rows
+
+        # Thumbnail must fit the cell in both directions.
+        thumb_width = min(max_cell_width, max_cell_height * aspect_ratio)
+        thumb_height = thumb_width / aspect_ratio
+
+        if best is None or thumb_width > best[0]:
+            best = (thumb_width, thumb_height, cols, rows)
+            # best = {
+            #     "thumb_width": thumb_width,
+            #     "thumb_height": thumb_height,
+            #     "cols": cols,
+            #     "rows": rows,
+            # }
+    return best
+
+
 def generate_mosaic(
     img_dataset: ImageDataset,
     output: Path | None = None,
@@ -138,39 +199,41 @@ def generate_mosaic(
 
     # determine ideal thumbnail size based on mosaic size and number of images
     n_images = df.height
-    # round to integer since we need pixel size; don't go beyond predefined max/min sizes
-    thumb_size = max(
-        MIN_THUMB_SIZE,
-        min(round(math.sqrt((width * height) / n_images)), MAX_THUMB_SIZE),
-    )
-    # in future, if adding support for non-square thumbnails, calculate based on aspect ratio
-    # thumb_w * thumb_h * N ≈ W * H
-    # Fix the aspect ratio r = thumb_w / thumb_h, substitute thumb_w = r * thumb_h, and solve:
-    # thumb_h = sqrt((W * H) / (N * r))
-    # thumb_w = r * thumb_h
+    # use the most frequent image aspect ratio in the dataset as thumbnail aspect ratio
+    img_aspect_ratio = df["aspect_ratio"].mode()[0]
+
+    best_grid_vals = best_grid(n_images, width, height, img_aspect_ratio)
+    thumbnail_width = round(best_grid_vals[0])
+    thumbnail_height = round(best_grid_vals[1])
+    grid_cols = best_grid_vals[2]
+    grid_rows = best_grid_vals[3]
+
+    thumbnail_width = round(width / grid_cols)
+    thumbnail_height = round(height / grid_rows)
 
     # determine number of grid slots based on the desired image size
-    grid_cols = width // thumb_size
-    grid_rows = height // thumb_size
-    # determine actual size based on determined thumbnail size and use that for the mosaic canvas
-    actual_width = grid_cols * thumb_size
-    actual_height = grid_rows * thumb_size
-
+    actual_width = grid_cols * thumbnail_width
+    actual_height = grid_rows * thumbnail_height
     assignments = assign_to_grid(df["umap"].to_numpy(), grid_cols, grid_rows)
 
     # create a blank canvas for the calculated size
-    canvas = Image.new("RGB", (actual_width, actual_height), color=(255, 255, 255))
-    for (row, col), img_idx in assignments.items():
+    canvas = Image.new("RGB", (actual_width, actual_height), color=(0, 0, 0))
+    # using black bg instead of white, which would be color=(255, 255, 255)
+    for (row, col), img_idx in tqdm.tqdm(
+        assignments.items(), total=n_images, desc="Creating mosaic"
+    ):
         try:
             # open the image and resize to desired thumbnail size
-            thumb = (
-                Image.open(paths[img_idx])
-                .convert("RGB")
-                .resize((thumb_size, thumb_size), Image.LANCZOS)
-                # resize with Lanczos (sinc) to minimize aliasing & artifacts
+            thumb = Image.open(paths[img_idx]).convert("RGB")
+            # NOTE: could use use thumbnail() to resize in place, preserving aspect ratio
+            # thumb.thumbnail((thumbnail_width, thumbnail_height), Image.LANCZOS)
+            # Use cover to fill the available space and preserve aspect ratio
+            thumb = ImageOps.cover(
+                thumb, (thumbnail_width, thumbnail_height), Image.LANCZOS
             )
+
             # paste the thumbnail on the grid in the appropriate slot
-            canvas.paste(thumb, (col * thumb_size, row * thumb_size))
+            canvas.paste(thumb, (col * thumbnail_width, row * thumbnail_height))
         except Exception as exc:
             warnings.warn(f"Could not load {paths[img_idx]}: {exc}")
 
