@@ -111,38 +111,37 @@ MIN_THUMB_SIZE = 20
 MAX_THUMB_SIZE = 350
 
 
-def estimate_columns(image_count, canvas_width, canvas_height, aspect_ratio, gap=0):
+def estimate_columns(image_count, canvas_width, canvas_height, aspect_ratio) -> int:
     """
-    Continuous estimate of the best column count.
+    Estimate of the best column count for the requested canvas size, given
+    the number of images with the specified aspect ratio.
 
-    aspect_ratio = thumbnail width / thumbnail height.
-    Treats each thumbnail plus one gap as a "pitch" cell and requires the
-    total area of all cells to equal the canvas area (padded by one gap
-    so the n-1 gaps between cells are counted correctly):
+    aspect_ratio = thumbnail width / thumbnail height
 
-        image_count * (w + gap) * (w / aspect_ratio + gap)
-            = (canvas_width + gap) * (canvas_height + gap)
+    Treat each image as a cell with the desired aspect ratio,
+    require the total area of all cells to equal the area of
+    the full canvas, and solve for thumbnail width.
 
-    Expanded, this is a quadratic in thumbnail width w:
-        quad_a * w^2 + quad_b * w + quad_c = 0
+        image_count * w * (w / aspect_ratio)
+            = canvas_width * canvas_height
+
+    Expanded, this is a quadratic to solve for thumbnail width w:
+        quad_a * w^2 + quad_b * w  = 0
     """
-    padded_canvas_area = (canvas_width + gap) * (canvas_height + gap)
+    canvas_area = canvas_width * canvas_height
 
     quad_a = image_count / aspect_ratio
-    quad_b = image_count * gap * (1 + 1 / aspect_ratio)
-    quad_c = image_count * gap**2 - padded_canvas_area
+    quad_b = image_count * canvas_area
 
-    discriminant = quad_b**2 - 4 * quad_a * quad_c
-    thumb_width = (-quad_b + math.sqrt(discriminant)) / (2 * quad_a)
+    discriminant = 4 * quad_a * quad_b
+    thumb_width = (math.sqrt(discriminant)) / (2 * quad_a)
 
-    return (canvas_width + gap) / (thumb_width + gap)
+    return round(canvas_width / thumb_width)
 
 
-def best_grid(
-    image_count, canvas_width, canvas_height, aspect_ratio, gap=0, search_window=3
-):
-    estimated_cols = round(
-        estimate_columns(image_count, canvas_width, canvas_height, aspect_ratio, gap)
+def best_grid(image_count, canvas_width, canvas_height, aspect_ratio, search_window=3):
+    estimated_cols = estimate_columns(
+        image_count, canvas_width, canvas_height, aspect_ratio
     )
 
     best = None
@@ -152,8 +151,8 @@ def best_grid(
     for cols in range(first_col, last_col + 1):
         rows = math.ceil(image_count / cols)
 
-        max_cell_width = (canvas_width - (cols - 1) * gap) / cols
-        max_cell_height = (canvas_height - (rows - 1) * gap) / rows
+        max_cell_width = canvas_width / cols
+        max_cell_height = canvas_height / rows
 
         # Thumbnail must fit the cell in both directions.
         thumb_width = min(max_cell_width, max_cell_height * aspect_ratio)
