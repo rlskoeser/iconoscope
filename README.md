@@ -130,17 +130,26 @@ number of images (roughly 10–15 KB per image).
 
 ## HDF5 file layout
 
-iconoscope stores image paths, extracted features, and derived data (like UMAP coordinates) in a single HDF5 file. organized per model so multiple embedding models can coexist in the same dataset:
+iconoscope stores image paths, extracted features, and derived data (like UMAP coordinates) in a single HDF5 file, organized per model so multiple embedding models can coexist in the same dataset:
 
 ```
 my_collection.h5
-└── image/                 (attrs: image_dir)
-    ├── paths               # image file paths, shape (N,)
+└── image/                  (attrs: image_dir)
+    ├── paths               # image file paths relative to image_dir, shape (N,)
+    ├── sizes               # image width and height in pixels, shape (N, 2)
     └── models/
         └── dinov2/         # one group per embedding model
             ├── features    # embedding vectors, shape (N, embed_dim)
-            └── umap        # 2D UMAP coordinates, shape (N, 2) [optional, added by `mosaic`]
+            ├── umap        # 2D UMAP coordinates, shape (N, 2) [optional, added by `mosaic`]
+            └── cluster     # cluster label per image, shape (N,) [optional, added by `cluster`]
+                            #   (attrs: n_clusters)
 ```
+
+`image_dir` is stored as an absolute path when the dataset is created, and
+image paths are stored relative to it; iconoscope combines them when loading,
+so a dataset can be used from any working directory. If the image directory
+moves, update the `image_dir` attribute. All datasets in `image/` and under each
+model share the same row order: row *i* is the same image everywhere.
 
 ## Acknowledgments
 
