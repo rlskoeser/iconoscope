@@ -1,6 +1,7 @@
 import math
 import warnings
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import tqdm
@@ -134,7 +135,33 @@ def estimate_columns(image_count, canvas_width, canvas_height, aspect_ratio) -> 
     return round(canvas_width / thumb_width)
 
 
-def best_grid(image_count, canvas_width, canvas_height, aspect_ratio, search_window=3):
+class GridLayout(NamedTuple):
+    """Grid size chosen by :func:`best_grid`.
+
+    ``thumb_width`` and ``thumb_height`` are the largest thumbnail size that
+    fits the canvas while preserving the requested aspect ratio exactly. When
+    the grid is stretched to fill the canvas (as :func:`generate_mosaic` does),
+    the actual cell size is ``canvas_width / cols`` by ``canvas_height / rows``,
+    which may differ from this ideal size in one dimension.
+    """
+
+    rows: int
+    cols: int
+    #: ideal thumbnail width for the requested aspect ratio (not stretched)
+    thumb_width: float
+    #: ideal thumbnail height for the requested aspect ratio (not stretched)
+    thumb_height: float
+
+
+def best_grid(
+    image_count, canvas_width, canvas_height, aspect_ratio, search_window=3
+) -> GridLayout:
+    """Choose the grid size near the estimated column count that allows the
+    largest thumbnails at the requested aspect ratio.
+
+    Returns a :class:`GridLayout` with rows, cols, and the ideal thumbnail
+    size for the aspect ratio. Callers that fill the canvas should compute
+    cell size from the canvas size and rows/cols instead."""
     estimated_cols = estimate_columns(
         image_count, canvas_width, canvas_height, aspect_ratio
     )
@@ -151,16 +178,10 @@ def best_grid(image_count, canvas_width, canvas_height, aspect_ratio, search_win
 
         # Thumbnail must fit the cell in both directions.
         thumb_width = min(max_cell_width, max_cell_height * aspect_ratio)
-        thumb_height = thumb_width / aspect_ratio
 
-        if best is None or thumb_width > best[0]:
-            best = (thumb_width, thumb_height, cols, rows)
-            # best = {
-            #     "thumb_width": thumb_width,
-            #     "thumb_height": thumb_height,
-            #     "cols": cols,
-            #     "rows": rows,
-            # }
+        if best is None or thumb_width > best.thumb_width:
+            best = GridLayout(rows, cols, thumb_width, thumb_width / aspect_ratio)
+
     return best
 
 
@@ -196,12 +217,10 @@ def generate_mosaic(
     # use the most frequent image aspect ratio in the dataset as thumbnail aspect ratio
     img_aspect_ratio = df["aspect_ratio"].mode()[0]
 
-    best_grid_vals = best_grid(n_images, width, height, img_aspect_ratio)
-    thumbnail_width = round(best_grid_vals[0])
-    thumbnail_height = round(best_grid_vals[1])
-    grid_cols = best_grid_vals[2]
-    grid_rows = best_grid_vals[3]
+    layout = best_grid(n_images, width, height, img_aspect_ratio)
+    grid_rows, grid_cols = layout.rows, layout.cols
 
+    # stretch thumbnails to fill the canvas
     thumbnail_width = round(width / grid_cols)
     thumbnail_height = round(height / grid_rows)
 
