@@ -90,7 +90,8 @@ class ImageDataset(IterableDataset):
         via :func:`find_images`. Image files are opened and verified to avoid
         adding broken image files to the dataset, and to determine image size.
         """
-        image_dir = Path(image_dir)
+        # store image dir as absolute, so dataset is independent of working directory
+        image_dir = Path(image_dir).resolve()
         storage_path = Path(storage_path)
         if not image_dir.is_dir():
             raise ValueError(f"Image directory `{image_dir}` is not a directory")
@@ -103,7 +104,8 @@ class ImageDataset(IterableDataset):
             try:
                 with Image.open(path) as image:
                     image.verify()
-                    valid_paths.append(str(path))
+                    # store paths relative to image dir; resolved on load
+                    valid_paths.append(str(path.relative_to(image_dir)))
                     image_sizes.append(image.size)  # tuple[int] of width,height
             except (OSError, SyntaxError) as err:
                 logger.warning("Skipping invalid image %s: %s", path, err)
@@ -119,6 +121,7 @@ class ImageDataset(IterableDataset):
 
         with h5py.File(storage_path, "w") as h5_file:
             image_group = h5_file.create_group("image")
+            # image paths are stored relative to the (absolute) image dir
             image_group.attrs["image_dir"] = str(image_dir)
             image_group.create_dataset(
                 "paths", data=df["paths"].to_list(), compression="gzip"
@@ -234,13 +237,19 @@ class ImageDataset(IterableDataset):
                     else:
                         # otherwise, prune invalid image paths and their corresponding sizes
                         img_subset_df = df.join(img_df, on="image_path", how="left")
+                        # store paths relative to image dir
+                        base = Path(img_grp.attrs["image_dir"])
+                        subset_paths = [
+                            str(Path(p).relative_to(base))
+                            for p in img_subset_df["image_path"]
+                        ]
                         # can't resize, so delete and recreate
                         # TODO: move this somewhere shared?
                         del img_grp["paths"]
                         del img_grp["sizes"]
                         img_grp.create_dataset(
                             "paths",
-                            data=img_subset_df["image_path"].to_list(),
+                            data=subset_paths,
                             compression="gzip",
                         )
                         img_grp.create_dataset(
@@ -260,10 +269,19 @@ class ImageDataset(IterableDataset):
 
             # Save shared metadata and create the new model only after validation.
             # TODO: also save max if specified and extensions if not default
-            if self.image_dir is not None:
-                img_grp.attrs["image_dir"] = str(self.image_dir)
             if "paths" not in img_grp:
-                img_grp.create_dataset("paths", data=image_paths, compression="gzip")
+                # dataset not created via create(); store image dir as absolute
+                # and paths relative to it, same as create()
+                image_dir = Path(self.image_dir).resolve()
+                img_grp.attrs["image_dir"] = str(image_dir)
+                img_grp.create_dataset(
+                    "paths",
+                    data=[
+                        str(Path(p).resolve().relative_to(image_dir))
+                        for p in image_paths
+                    ],
+                    compression="gzip",
+                )
             models_grp = img_grp.require_group("models")
             model_grp = models_grp.create_group(model_name)
             # save extracted features as a dataset
@@ -354,8 +372,11 @@ class ImageDataset(IterableDataset):
             if paths:
                 img_dataset = f["image/paths"]
                 img_sizes = f["image/sizes"]
-                # load image paths as string instead of binary string
-                data["image_path"] = img_dataset[:].astype("T")[:]
+                # stored paths are relative to image dir; return full paths
+                image_dir = Path(img_grp.attrs["image_dir"])
+                data["image_path"] = [
+                    str(image_dir / p) for p in img_dataset[:].astype("T")
+                ]
                 # return image sizes as well
                 data["image_size"] = img_sizes[:]
 

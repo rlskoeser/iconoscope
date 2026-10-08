@@ -52,6 +52,26 @@ def test_create_writes_validated_image_inventory(tmp_path: Path, tmp_image_dir: 
         assert "image/models" not in h5_file
 
 
+def test_create_stores_absolute_image_dir_and_relative_paths(
+    tmp_path: Path, tmp_image_dir: Path, monkeypatch
+):
+    # create from a relative image dir, as when running the CLI
+    monkeypatch.chdir(tmp_image_dir.parent)
+    dataset = ImageDataset.create(Path(tmp_image_dir.name), tmp_path / "data.h5")
+
+    with h5py.File(tmp_path / "data.h5", "r") as h5_file:
+        img_grp = h5_file["image"]
+        assert img_grp.attrs["image_dir"] == str(tmp_image_dir.resolve())
+        stored = img_grp["paths"][:].astype("T").tolist()
+        assert stored == sorted(p.name for p in tmp_image_dir.glob("*.jpg"))
+
+    # loaded paths are absolute and usable from any working directory
+    monkeypatch.chdir(tmp_path.parent)
+    paths = dataset.get_image_data()["image_path"].to_list()
+    assert paths == sorted(str(p.resolve()) for p in tmp_image_dir.glob("*.jpg"))
+    assert all(Path(p).is_file() for p in paths)
+
+
 def test_get_image_data(tmp_path: Path, tmp_image_dir: Path):
     # when storage file doesn't exist, yields results from find image method
     h5_datafile = tmp_path / "data.h5"
