@@ -185,6 +185,51 @@ def best_grid(
     return best
 
 
+class MosaicLayout(NamedTuple):
+    """Full mosaic layout computed by :func:`layout_mosaic`: grid size,
+    the (integer pixel) cell size used to fill the canvas, and grid assignments."""
+
+    grid: GridLayout
+    #: cell width in pixels (grid stretched to fill the requested canvas)
+    cell_width: int
+    #: cell height in pixels
+    cell_height: int
+    #: {(row, col): item_idx}, as returned by :func:`assign_to_grid`
+    assignments: dict[tuple[int, int], int]
+
+    @property
+    def canvas_width(self) -> int:
+        """Actual canvas width; may differ slightly from requested due to rounding."""
+        return self.grid.cols * self.cell_width
+
+    @property
+    def canvas_height(self) -> int:
+        """Actual canvas height; may differ slightly from requested due to rounding."""
+        return self.grid.rows * self.cell_height
+
+
+def layout_mosaic(
+    coords: np.ndarray, canvas_width: int, canvas_height: int, aspect_ratio: float
+) -> MosaicLayout:
+    """Determine grid size and cell size for the canvas and image aspect ratio,
+    and assign each 2D coordinate (normalized 0-1) to a grid cell."""
+    grid = best_grid(len(coords), canvas_width, canvas_height, aspect_ratio)
+    # determine thumbnail size that will fill the canvas
+    cell_width = round(canvas_width / grid.cols)
+    cell_height = round(canvas_height / grid.rows)
+    assignments = assign_to_grid(coords, grid.cols, grid.rows)
+    return MosaicLayout(grid, cell_width, cell_height, assignments)
+
+
+def load_thumbnail(path: str | Path, size: tuple[int, int]) -> Image.Image:
+    """Open an image and resize to exactly ``size`` (width, height), cropping
+    as needed to fill the space while preserving the image aspect ratio."""
+    with Image.open(path) as img:
+        # NOTE: ImageOps.cover only scales (result may be larger than size);
+        # fit scales and center-crops to exactly size
+        return ImageOps.fit(img.convert("RGB"), size, Image.LANCZOS)
+
+
 def generate_mosaic(
     img_dataset: ImageDataset,
     output: Path | None = None,
@@ -217,38 +262,22 @@ def generate_mosaic(
     # use the most frequent image aspect ratio in the dataset as thumbnail aspect ratio
     img_aspect_ratio = df["aspect_ratio"].mode()[0]
 
-    grid_layout = best_grid(n_images, width, height, img_aspect_ratio)
-
-    # determine thumbnail size that will fill the canvas
-    thumbnail_width = round(width / grid_layout.cols)
-    thumbnail_height = round(height / grid_layout.rows)
-
-    # due to rounding, actual canvas size may not be exactly as requested;
-    # determine based on thumbnail size and grid
-    actual_width = grid_layout.cols * thumbnail_width
-    actual_height = grid_layout.rows * thumbnail_height
-    assignments = assign_to_grid(
-        df["umap"].to_numpy(), grid_layout.cols, grid_layout.rows
-    )
+    layout = layout_mosaic(df["umap"].to_numpy(), width, height, img_aspect_ratio)
+    thumb_size = (layout.cell_width, layout.cell_height)
 
     # create a blank canvas for the calculated size
-    canvas = Image.new("RGB", (actual_width, actual_height), color=(0, 0, 0))
+    # (due to rounding, actual canvas size may not be exactly as requested)
+    canvas = Image.new(
+        "RGB", (layout.canvas_width, layout.canvas_height), color=(0, 0, 0)
+    )
     # using black bg instead of white, which would be color=(255, 255, 255)
     for (row, col), img_idx in tqdm.tqdm(
-        assignments.items(), total=n_images, desc="Creating mosaic"
+        layout.assignments.items(), total=n_images, desc="Creating mosaic"
     ):
         try:
-            # open the image and resize to desired thumbnail size
-            thumb = Image.open(paths[img_idx]).convert("RGB")
-            # NOTE: could use use thumbnail() to resize in place, preserving aspect ratio
-            # thumb.thumbnail((thumbnail_width, thumbnail_height), Image.LANCZOS)
-            # Use cover to fill the available space and preserve aspect ratio
-            thumb = ImageOps.cover(
-                thumb, (thumbnail_width, thumbnail_height), Image.LANCZOS
-            )
-
+            thumb = load_thumbnail(paths[img_idx], thumb_size)
             # paste the thumbnail on the grid in the appropriate slot
-            canvas.paste(thumb, (col * thumbnail_width, row * thumbnail_height))
+            canvas.paste(thumb, (col * layout.cell_width, row * layout.cell_height))
         except Exception as exc:
             warnings.warn(f"Could not load {paths[img_idx]}: {exc}")
 

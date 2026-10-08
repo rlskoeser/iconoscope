@@ -95,3 +95,35 @@ def test_best_grid(
     assert layout.thumb_width / layout.thumb_height == pytest.approx(aspect_ratio)
     assert layout.thumb_width * layout.cols <= canvas_width
     assert layout.thumb_height * layout.rows <= canvas_height
+
+
+@pytest.mark.parametrize(
+    ("image_count", "canvas_width", "canvas_height", "aspect_ratio"),
+    [(100, 2000, 2000, 1.0), (50, 2000, 1200, 0.75), (37, 1000, 1000, 1.5)],
+)
+def test_layout_mosaic(
+    image_count: int, canvas_width: int, canvas_height: int, aspect_ratio: float
+) -> None:
+    coords = np.random.default_rng(0).random((image_count, 2)).astype(np.float32)
+    layout = mosaic.layout_mosaic(coords, canvas_width, canvas_height, aspect_ratio)
+    grid = mosaic.best_grid(image_count, canvas_width, canvas_height, aspect_ratio)
+    assert layout.grid == grid
+    # cells stretch the grid to fill the canvas
+    assert layout.cell_width == round(canvas_width / grid.cols)
+    assert layout.cell_height == round(canvas_height / grid.rows)
+    assert layout.canvas_width == grid.cols * layout.cell_width
+    assert layout.canvas_height == grid.rows * layout.cell_height
+    # every image placed exactly once, in a valid cell
+    assert sorted(layout.assignments.values()) == list(range(image_count))
+    for row, col in layout.assignments:
+        assert 0 <= row < grid.rows and 0 <= col < grid.cols
+
+
+def test_load_thumbnail(tmp_path) -> None:
+    from PIL import Image
+
+    path = tmp_path / "wide.png"
+    Image.new("RGB", (400, 100), (255, 0, 0)).save(path)
+    thumb = mosaic.load_thumbnail(path, (30, 40))
+    assert thumb.size == (30, 40)
+    assert thumb.mode == "RGB"

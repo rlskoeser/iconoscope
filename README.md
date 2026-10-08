@@ -66,7 +66,7 @@ To generate an embeddings mosaic image, pass the HDF5 dataset file created by th
 iconoscope mosaic my_collection.h5
 ```
 
-By default, this will create a mosaic based on the name of the collection, e.g. `my_collection.jpg`. Output size and filename can be customized with command-line parameters. Thumbnail size is automatically determined to best fit images for the output mosaic size (currently converts all images to squares).
+By default, this will create a mosaic based on the name of the collection, e.g. `my_collection.jpg`. Output size and filename can be customized with command-line parameters. Thumbnail size is automatically determined to best fit images for the output mosaic size, based on the most common image aspect ratio in the dataset; images are scaled and center-cropped to fill their grid cell.
 
 ### info
 
@@ -79,6 +79,54 @@ Details for my_collection.h5 :
   dinov2 extracted features (4302x768)
      umap coordinates (4302x2)
 ```
+
+## UMAP → grid notebook
+
+`notebooks/umap_to_grid.py` is a [marimo](https://marimo.io) notebook that
+animates how the mosaic layout works: each image moves from its 2D UMAP
+position to its assigned grid cell, using the same layout code as
+`iconoscope mosaic`. The animation is drawn with
+[Observable Plot](https://observablehq.com/plot/) (via
+[wigglystuff](https://github.com/koaning/wigglystuff)), and the JavaScript for
+it lives in `notebooks/umap_to_grid.js`.
+
+Run it from the repository root:
+
+```console
+uv run --with marimo --with wigglystuff marimo edit notebooks/umap_to_grid.py
+```
+
+Enter the path to a dataset `.h5` file that has embeddings (from `iconoscope embed`), or leave it blank to use synthetic data. Set the sample size and
+mosaic canvas size, and check **Thumbnails** to show images instead of colored
+points. In the plot, use ▶ or the slider to run the animation; the controls also
+toggle displacement lines and whether thumbnails *cover* (crop to fill) or *fit*
+(show whole image) their cells.
+
+### Exporting for the web
+
+The **Export for the web** section at the bottom of the notebook saves the
+current grid so it can be embedded elsewhere, e.g. in a blog post:
+
+1. Set the export folder (default `notebooks/export/`, which is git-ignored), a
+   name (used in the file name), and a title (shown in a dropdown).
+1. Click **Export**. This saves `umap_grid_<name>.json` with the layout and
+   inline thumbnails. Exporting again with the same name replaces it.
+1. Repeat for other datasets or settings to compare multiple grids.
+
+After each export, two files are regenerated to include every grid in the
+folder, with a dropdown to switch between them:
+
+- `umap_grid_observable.js`: a single cell for an
+  [Observable](https://observablehq.com) notebook. Attach each
+  `umap_grid_*.json` file to the notebook with the same file name, then paste
+  the contents of this file into a cell.
+- `index.html`: a standalone page that loads the JSON files next to it. Host
+  the whole folder, or preview locally with `python -m http.server` in the
+  export folder and open <http://localhost:8000/>.
+
+Image labels are exported as file names only, so local paths are not
+published. Thumbnails are embedded in the JSON, so file size grows with the
+number of images (roughly 10–15 KB per image).
 
 ## HDF5 file layout
 
