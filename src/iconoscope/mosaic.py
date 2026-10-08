@@ -217,17 +217,19 @@ def generate_mosaic(
     # use the most frequent image aspect ratio in the dataset as thumbnail aspect ratio
     img_aspect_ratio = df["aspect_ratio"].mode()[0]
 
-    layout = best_grid(n_images, width, height, img_aspect_ratio)
-    grid_rows, grid_cols = layout.rows, layout.cols
+    grid_layout = best_grid(n_images, width, height, img_aspect_ratio)
 
-    # stretch thumbnails to fill the canvas
-    thumbnail_width = round(width / grid_cols)
-    thumbnail_height = round(height / grid_rows)
+    # determine thumbnail size that will fill the canvas
+    thumbnail_width = round(width / grid_layout.cols)
+    thumbnail_height = round(height / grid_layout.rows)
 
-    # determine number of grid slots based on the desired image size
-    actual_width = grid_cols * thumbnail_width
-    actual_height = grid_rows * thumbnail_height
-    assignments = assign_to_grid(df["umap"].to_numpy(), grid_cols, grid_rows)
+    # due to rounding, actual canvas size may not be exactly as requested;
+    # determine based on thumbnail size and grid
+    actual_width = grid_layout.cols * thumbnail_width
+    actual_height = grid_layout.rows * thumbnail_height
+    assignments = assign_to_grid(
+        df["umap"].to_numpy(), grid_layout.cols, grid_layout.rows
+    )
 
     # create a blank canvas for the calculated size
     canvas = Image.new("RGB", (actual_width, actual_height), color=(0, 0, 0))
