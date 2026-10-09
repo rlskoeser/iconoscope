@@ -220,3 +220,6 @@ __marimo__/
 # numpy stuff
 *.np[zy]
 
+
+# umap_to_grid notebook web exports
+notebooks/export/

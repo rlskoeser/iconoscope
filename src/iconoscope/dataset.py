@@ -2,6 +2,7 @@ import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self
 
 import h5py
 import numpy as np
@@ -27,6 +28,12 @@ def find_images(
     """
     Find images within the specified directory. Can optionally limit by file extension
     or stop when a specified maximum number of images is found.
+
+    Results are yielded in filesystem order, which is arbitrary and varies by
+    platform and filesystem (e.g., it may look sorted on macOS but not on Linux).
+    When `max` is specified, the subset of images returned is therefore arbitrary
+    and not guaranteed to be the same across systems; callers should not assume
+    any particular order or subset.
     """
 
     # if no extensions are specified, use the defaults
@@ -71,7 +78,8 @@ class ImageDataset(IterableDataset):
     #: image extensions; if not specified, uses the defaults
     extensions: set[str] = field(default_factory=DEFAULT_IMG_EXTENSIONS.copy)
 
-    #: optional limit for number of images to find
+    #: optional limit for number of images to find; which images are included
+    #: is arbitrary (filesystem order), see :func:`find_images`
     max_images: int | None = None
 
     @classmethod
@@ -82,14 +90,15 @@ class ImageDataset(IterableDataset):
         *,
         extensions: set[str] | None = None,
         max_images: int | None = None,
-    ) -> "ImageDataset":
+    ) -> Self:
         """Collect images and create a new image dataset. Does not generate embeddings.
 
         Finds image files within the specified `image_dir` based on extension
         via :func:`find_images`. Image files are opened and verified to avoid
-        adding broken image files to the dataset.
+        adding broken image files to the dataset, and to determine image size.
         """
-        image_dir = Path(image_dir)
+        # store image dir as absolute, so dataset is independent of working directory
+        image_dir = Path(image_dir).resolve()
         storage_path = Path(storage_path)
         if not image_dir.is_dir():
             raise ValueError(f"Image directory `{image_dir}` is not a directory")
@@ -97,28 +106,42 @@ class ImageDataset(IterableDataset):
             raise ValueError(f"Dataset already exists: {storage_path}")
 
         valid_paths = []
+        image_sizes = []
         for path in find_images(image_dir, extensions=extensions, max=max_images):
             try:
                 with Image.open(path) as image:
                     image.verify()
+                    # store paths relative to image dir; resolved on load
+                    valid_paths.append(str(path.relative_to(image_dir)))
+                    image_sizes.append(image.size)  # tuple[int] of width,height
             except (OSError, SyntaxError) as err:
                 logger.warning("Skipping invalid image %s: %s", path, err)
                 continue
-            valid_paths.append(str(path))
 
         if not valid_paths:
             raise ValueError(f"No valid images found in `{image_dir}`")
 
+        # glob order is indeterminate; load into a dataframe and sort by path before saving
+        df = pl.DataFrame(data={"paths": valid_paths, "sizes": image_sizes}).sort(
+            "paths"
+        )
+
         with h5py.File(storage_path, "w") as h5_file:
             image_group = h5_file.create_group("image")
+            # image paths are stored relative to the (absolute) image dir
             image_group.attrs["image_dir"] = str(image_dir)
-            image_group.create_dataset("paths", data=valid_paths, compression="gzip")
-            image_group.create_group("models")
+            image_group.create_dataset(
+                "paths", data=df["paths"].to_list(), compression="gzip"
+            )
+            image_group.create_dataset(
+                "sizes", data=df["sizes"].to_list(), compression="gzip"
+            )
 
         return cls(storage_path=storage_path)
 
     def __post_init__(self):
         # when creating a new collection, storage will not exist so image dir is required
+        # TODO: require create with image dir, and only open existing storage in init method
         if not self.storage_path.exists():
             if self.image_dir is None:
                 raise ValueError(
@@ -132,9 +155,9 @@ class ImageDataset(IterableDataset):
 
     def get_image_paths(self) -> Iterator[Path]:
         """Yield a list of image paths either from configured image directory or stored data file"""
+        # TODO: simplify when we update init to storage only
         if self.storage_path.exists():
-            # print("loading images from storage")  # add logging?
-            for row in self.load_image_paths().iter_rows(named=True):
+            for row in self.get_image_data().iter_rows(named=True):
                 yield Path(row["image_path"])
         elif self.image_dir:
             # print("finding images on disk")
@@ -174,12 +197,15 @@ class ImageDataset(IterableDataset):
         existing data, e.g. features from other models.
         """
         expected_columns = {"image_path", "features"}
+
         missing_columns = expected_columns - set(df.columns)
         if missing_columns:
             raise ValueError(
                 f"Missing required columns: {', '.join(sorted(missing_columns))}"
             )
-        unsupported_columns = set(df.columns) - expected_columns
+        # image size and aspect ratio are allowed but not required (since now included in get_image_data)
+        allowed_columns = {"image_size", "aspect_ratio"}
+        unsupported_columns = set(df.columns) - expected_columns - allowed_columns
         if unsupported_columns:
             raise ValueError(
                 f"unsupported columns: {', '.join(sorted(unsupported_columns))}"
@@ -199,35 +225,45 @@ class ImageDataset(IterableDataset):
             # Check that saved images match the current set before making any updates.
             # TODO: update this once we split out dataset creation from embed
             if "paths" in img_grp:
-                stored_paths_dataset = img_grp["paths"]
-                stored_paths = stored_paths_dataset[:]
-                stored_paths = [
-                    path.decode() if isinstance(path, bytes) else str(path)
-                    for path in stored_paths
-                ]
-                requested_paths = [str(path) for path in image_paths]
-                if stored_paths != requested_paths:
-                    # Embedding skips files that Pillow cannot read. On the
-                    # first model, prune those paths so future model rows stay
-                    # aligned with the inventory.
-                    stored_iter = iter(stored_paths)
-                    is_subsequence = all(
-                        any(path == requested for path in stored_iter)
-                        for requested in requested_paths
+                img_df = self.get_image_data()
+                # error if any image paths are in the incoming df but not in the stored image paths
+                unknown_img_df = df.join(img_df, on="image_path", how="anti")
+                if unknown_img_df.height:
+                    raise ValueError(
+                        "image paths do not match the existing dataset (%d unknown paths)",
+                        unknown_img_df.height,
                     )
-                    if not is_subsequence:
+                # check if total does not match
+                if img_df.height != df.height:
+                    # if any features have already been saved, error
+                    has_model_features = len(img_grp.get("models", []))
+                    if has_model_features:
                         raise ValueError(
-                            "image paths do not match the existing dataset"
+                            "cannot prune image paths when existing models are present"
                         )
-                    if models_grp := img_grp.get("models"):
-                        if len(models_grp):
-                            raise ValueError(
-                                "cannot prune image paths when existing models are present"
-                            )
-                    del img_grp["paths"]
-                    img_grp.create_dataset(
-                        "paths", data=image_paths, compression="gzip"
-                    )
+                    else:
+                        # otherwise, prune invalid image paths and their corresponding sizes
+                        img_subset_df = df.join(img_df, on="image_path", how="left")
+                        # store paths relative to image dir
+                        base = Path(img_grp.attrs["image_dir"])
+                        subset_paths = [
+                            str(Path(p).relative_to(base))
+                            for p in img_subset_df["image_path"]
+                        ]
+                        # can't resize, so delete and recreate
+                        # TODO: move this somewhere shared?
+                        del img_grp["paths"]
+                        del img_grp["sizes"]
+                        img_grp.create_dataset(
+                            "paths",
+                            data=subset_paths,
+                            compression="gzip",
+                        )
+                        img_grp.create_dataset(
+                            "sizes",
+                            data=img_subset_df["image_size"].to_list(),
+                            compression="gzip",
+                        )
 
             # Currently does not support overwriting features for a model
             # that has already been saved to this file.
@@ -240,10 +276,19 @@ class ImageDataset(IterableDataset):
 
             # Save shared metadata and create the new model only after validation.
             # TODO: also save max if specified and extensions if not default
-            if self.image_dir is not None:
-                img_grp.attrs["image_dir"] = str(self.image_dir)
             if "paths" not in img_grp:
-                img_grp.create_dataset("paths", data=image_paths, compression="gzip")
+                # dataset not created via create(); store image dir as absolute
+                # and paths relative to it, same as create()
+                image_dir = Path(self.image_dir).resolve()
+                img_grp.attrs["image_dir"] = str(image_dir)
+                img_grp.create_dataset(
+                    "paths",
+                    data=[
+                        str(Path(p).resolve().relative_to(image_dir))
+                        for p in image_paths
+                    ],
+                    compression="gzip",
+                )
             models_grp = img_grp.require_group("models")
             model_grp = models_grp.create_group(model_name)
             # save extracted features as a dataset
@@ -280,33 +325,42 @@ class ImageDataset(IterableDataset):
             img_grp = f["image"]
             orig_img_dir = img_grp.attrs.get("image_dir")
 
+            img_df = self.get_image_data().with_columns(
+                aspect_ratio=pl.col.image_size.arr.first().truediv(
+                    pl.col.image_size.arr.last()
+                )
+            )
+
             info = {
                 "image_paths": image_count,
                 "image_dir": orig_img_dir,
+                "image_size_mode": img_df["image_size"].mode().to_list()[0],
+                "image_aspect_mode": img_df["aspect_ratio"].mode().to_list()[0],
                 "models": {},
             }
-            all_models_grp = img_grp["models"]
-            for model in all_models_grp.keys():
-                model_grp = all_models_grp[model]
-                model_data = {}
-                if "features" in model_grp:
-                    features = model_grp["features"]
-                    model_data["embeddings"] = features.shape
-                if "umap" in model_grp:
-                    umap = model_grp["umap"]
-                    model_data["umap"] = umap.shape
-                if "cluster" in model_grp:
-                    cluster_ds = model_grp["cluster"]
-                    model_data["cluster"] = {
-                        "k": cluster_ds.attrs.get("n_clusters"),
-                        "size": cluster_ds.size,
-                    }
+            all_models_grp = img_grp.get("models")
+            if all_models_grp:
+                for model in all_models_grp.keys():
+                    model_grp = all_models_grp[model]
+                    model_data = {}
+                    if "features" in model_grp:
+                        features = model_grp["features"]
+                        model_data["embeddings"] = features.shape
+                    if "umap" in model_grp:
+                        umap = model_grp["umap"]
+                        model_data["umap"] = umap.shape
+                    if "cluster" in model_grp:
+                        cluster_ds = model_grp["cluster"]
+                        model_data["cluster"] = {
+                            "k": cluster_ds.attrs.get("n_clusters"),
+                            "size": cluster_ds.size,
+                        }
 
-                # any validation ? check rows?
-                info["models"][model] = model_data
+                    # any validation ? check rows?
+                    info["models"][model] = model_data
             return info
 
-    def load_image_paths(self) -> pl.DataFrame:
+    def get_image_data(self) -> pl.DataFrame:
         return self.load_data()  # images paths only by default
 
     def load_data(
@@ -323,9 +377,15 @@ class ImageDataset(IterableDataset):
             img_grp = f["image"]
             data = {}
             if paths:
-                img_dataset = img_grp["paths"]
-                # load image paths as string instead of binary string
-                data["image_path"] = img_dataset[:].astype("T")[:]
+                img_dataset = f["image/paths"]
+                img_sizes = f["image/sizes"]
+                # stored paths are relative to image dir; return full paths
+                image_dir = Path(img_grp.attrs["image_dir"])
+                data["image_path"] = [
+                    str(image_dir / p) for p in img_dataset[:].astype("T")
+                ]
+                # return image sizes as well
+                data["image_size"] = img_sizes[:]
 
             if features or umap:
                 # if umap is requested but has not yet been generated, calculate and save
@@ -372,4 +432,13 @@ class ImageDataset(IterableDataset):
                 # move cluster generation logic to dataset; support cluster/save on demand?
                 # then load as cluster_k{n} in dataframe when requested
 
-            return pl.DataFrame(data=data)
+            df = pl.DataFrame(data=data)
+            # when image size is present, calculate aspect ratio
+            if "image_size" in df.columns:
+                df = df.with_columns(
+                    aspect_ratio=pl.col.image_size.arr.first().truediv(
+                        pl.col.image_size.arr.last()
+                    )
+                )
+
+            return df

@@ -64,7 +64,10 @@ def main():
         help="File path for the image dataset (.hdf5)",
     )
     parser_create.add_argument(
-        "-m", "--max", type=int, help="Limit to specified number of images"
+        "-m",
+        "--max",
+        type=int,
+        help="Limit to specified number of images (arbitrary subset, not sorted)",
     )
 
     ## embed : extract features from an existing dataset
