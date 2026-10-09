@@ -170,7 +170,8 @@ def test_save_features_preserves_existing_data(tmp_path: Path, tmp_image_dir: Pa
     dataset = ImageDataset.create(
         storage_path=storage_path, image_dir=tmp_image_dir, max_images=2
     )
-    paths = sorted(list([str(p) for p in tmp_image_dir.glob("*.jpg")]))[:2]
+    # use the paths the dataset found; filesystem glob order varies by platform
+    paths = [str(p) for p in dataset.get_image_paths()]
 
     dataset.save_features(
         pl.DataFrame(
@@ -300,7 +301,8 @@ def test_save_features_rejects_unsupported_columns(tmp_path: Path, tmp_image_dir
     dataset = ImageDataset.create(
         image_dir=tmp_image_dir, storage_path=tmp_image_dir / "data.h5", max_images=2
     )
-    image_paths = sorted(list([str(p) for p in tmp_image_dir.glob("*.jpg")]))[:2]
+    # use the paths the dataset found; filesystem glob order varies by platform
+    image_paths = [str(p) for p in dataset.get_image_paths()]
     with pytest.raises(ValueError, match="unsupported"):
         dataset.save_features(
             pl.DataFrame(
@@ -318,7 +320,8 @@ def test_save_features_no_overwrite(tmp_path: Path, tmp_image_dir: Path):
     dataset = ImageDataset.create(
         image_dir=tmp_image_dir, storage_path=tmp_image_dir / "data.h5", max_images=2
     )
-    image_paths = sorted(list([str(p) for p in tmp_image_dir.glob("*.jpg")]))[:2]
+    # use the paths the dataset found; filesystem glob order varies by platform
+    image_paths = [str(p) for p in dataset.get_image_paths()]
     feature_df = pl.DataFrame(
         {
             "image_path": image_paths,
@@ -340,7 +343,8 @@ def test_has_features(tmp_path: Path, tmp_image_dir: Path):
     dataset = ImageDataset.create(
         image_dir=tmp_image_dir, storage_path=tmp_image_dir / "data.h5", max_images=2
     )
-    image_paths = sorted(list([str(p) for p in tmp_image_dir.glob("*.jpg")]))[:2]
+    # use the paths the dataset found; filesystem glob order varies by platform
+    image_paths = [str(p) for p in dataset.get_image_paths()]
     feature_df = pl.DataFrame(
         {
             "image_path": image_paths,
@@ -396,6 +400,9 @@ def test_find_images_recurses_subdirs(tmp_path: Path):
 def test_find_images_max(tmp_image_dir: Path):
     items = list(find_images(tmp_image_dir, max=2))
     assert len(items) == 2
+    # which images are returned depends on filesystem order (differs between
+    # macOS and Linux), so only check that they are a subset of all images
+    assert set(items) <= set(find_images(tmp_image_dir))
 
 
 def test_find_images_default_extensions(tmp_path: Path):

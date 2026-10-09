@@ -28,6 +28,12 @@ def find_images(
     """
     Find images within the specified directory. Can optionally limit by file extension
     or stop when a specified maximum number of images is found.
+
+    Results are yielded in filesystem order, which is arbitrary and varies by
+    platform and filesystem (e.g., it may look sorted on macOS but not on Linux).
+    When `max` is specified, the subset of images returned is therefore arbitrary
+    and not guaranteed to be the same across systems; callers should not assume
+    any particular order or subset.
     """
 
     # if no extensions are specified, use the defaults
@@ -72,7 +78,8 @@ class ImageDataset(IterableDataset):
     #: image extensions; if not specified, uses the defaults
     extensions: set[str] = field(default_factory=DEFAULT_IMG_EXTENSIONS.copy)
 
-    #: optional limit for number of images to find
+    #: optional limit for number of images to find; which images are included
+    #: is arbitrary (filesystem order), see :func:`find_images`
     max_images: int | None = None
 
     @classmethod
